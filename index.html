@@ -7,36 +7,36 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase SDKs -->
     <script type="module">
+        // Import Firebase modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+        import { getAuth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
 
-        // Firebase configuration from user query
-        const firebaseConfig = {
-            apiKey: "AIzaSyBSPbMCpsZdQ3o5wp5X_QI_HZicXfuZFE0",
-            authDomain: "pipthechef.firebaseapp.com",
-            projectId: "pipthechef",
-            storageBucket: "pipthechef.firebasestorage.app",
-            messagingSenderId: "380947665181",
-            appId: "1:380947665181:web:5488ccbd5fad97b8fb11f4",
-            measurementId: "G-GRNXVKZR3S"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
         // Global variables for Firebase instances and user data
+        // Use __app_id and __firebase_config provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+
+        // Initialize Firebase app only if config is available
+        let app, auth, db;
+        if (Object.keys(firebaseConfig).length > 0) {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } else {
+            console.error("Firebase configuration not found. Please ensure __firebase_config is set.");
+            // Fallback for development outside Canvas if needed, but not for production in Canvas
+        }
+
         window.firebaseApp = app;
         window.firebaseAuth = auth;
         window.firebaseDb = db;
         window.currentUserId = null;
         window.isPremiumMember = false;
-        window.appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'; // Use __app_id from Canvas
+        window.appId = appId; // Assign the determined appId to window
 
         // Stripe Payment Link ID from user query
-        window.stripePaymentLink = "https://buy.stripe.com/plink_1RmZMbLOZKHisj8AQQHnnCuR"; // Using the provided payment link
+        window.stripePaymentLink = "https://buy.stripe.com/bJe3cwagjgPH9o98G34gg00"; // Updated payment link
 
         // Listen for auth state changes
         onAuthStateChanged(auth, async (user) => {
@@ -49,35 +49,61 @@
             const passwordInput = document.getElementById('passwordInput');
             const loginSignupMessage = document.getElementById('loginSignupMessage');
 
+            // Attempt to sign in with custom token first if available
+            if (typeof __initial_auth_token !== 'undefined' && !user) {
+                try {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                    // User will be set by the onAuthStateChanged listener after this
+                } catch (error) {
+                    console.error("Error signing in with custom token:", error);
+                    showMessage("Failed to sign in automatically. Please try again or use email/password.", "error");
+                    // No anonymous fallback as requested
+                }
+            }
+
             if (user) {
                 window.currentUserId = user.uid;
-                userIdDisplay.textContent = `Logged in as: ${user.isAnonymous ? 'Anonymous' : user.email}`;
+                userIdDisplay.textContent = `Logged in as: ${user.isAnonymous ? 'Anonymous' : user.email || user.uid}`; // Show UID for anonymous
                 authButtons.innerHTML = `<button id="signOutBtn" class="btn bg-red-500 hover:bg-red-600">Sign Out</button>`;
                 document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
 
+                // Display full userId for multi-user apps (as per instructions)
+                const fullUserIdDisplay = document.createElement('p');
+                fullUserIdDisplay.className = "text-sm text-gray-500 mt-1";
+                fullUserIdDisplay.textContent = `User ID: ${user.uid}`;
+                userIdDisplay.parentNode.insertBefore(fullUserIdDisplay, userIdDisplay.nextSibling);
+
+
                 // Check membership status in Firestore
-                const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
-                onSnapshot(userProfileRef, (docSnap) => {
-                    if (docSnap.exists() && docSnap.data().status === 'premium') {
-                        window.isPremiumMember = true;
-                        membershipStatusDisplay.textContent = 'Status: Premium Member ✨';
-                        activateMembershipBtn.style.display = 'none';
-                        confirmMembershipBtn.style.display = 'none';
-                        loginSignupMessage.textContent = ''; // Clear message
-                    } else {
+                // Ensure db is initialized before trying to access it
+                if (db) {
+                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
+                    onSnapshot(userProfileRef, (docSnap) => {
+                        if (docSnap.exists() && docSnap.data().status === 'premium') {
+                            window.isPremiumMember = true;
+                            membershipStatusDisplay.textContent = 'Status: Premium Member ✨';
+                            activateMembershipBtn.style.display = 'none';
+                            confirmMembershipBtn.style.display = 'none';
+                            loginSignupMessage.textContent = ''; // Clear message
+                        } else {
+                            window.isPremiumMember = false;
+                            membershipStatusDisplay.textContent = 'Status: Free User';
+                            activateMembershipBtn.style.display = 'inline-block';
+                            confirmMembershipBtn.style.display = 'none'; // Hide confirm until payment link is visited
+                            loginSignupMessage.textContent = 'Upgrade to unlock all recipes!';
+                        }
+                        updateRecipeAccess(); // Update UI based on membership
+                    }, (error) => {
+                        console.error("Error listening to membership status:", error);
                         window.isPremiumMember = false;
-                        membershipStatusDisplay.textContent = 'Status: Free User';
-                        activateMembershipBtn.style.display = 'inline-block';
-                        confirmMembershipBtn.style.display = 'none'; // Hide confirm until payment link is visited
-                        loginSignupMessage.textContent = 'Upgrade to unlock all recipes!';
-                    }
-                    updateRecipeAccess(); // Update UI based on membership
-                }, (error) => {
-                    console.error("Error listening to membership status:", error);
-                    window.isPremiumMember = false;
-                    membershipStatusDisplay.textContent = 'Status: Free User (Error loading status)';
+                        membershipStatusDisplay.textContent = 'Status: Free User (Error loading status)';
+                        updateRecipeAccess();
+                    });
+                } else {
+                    console.warn("Firestore not initialized, cannot check membership status.");
+                    membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
                     updateRecipeAccess();
-                });
+                }
 
             } else {
                 window.currentUserId = null;
@@ -95,12 +121,6 @@
                 activateMembershipBtn.style.display = 'none'; // Only show after anonymous login
                 confirmMembershipBtn.style.display = 'none';
                 loginSignupMessage.textContent = 'Sign in or sign up to save your progress and access premium features.';
-
-                // Sign in anonymously if no user is logged in
-                signInAnonymously(auth).catch((error) => {
-                    console.error("Error signing in anonymously:", error);
-                    showMessage("Failed to sign in anonymously. Please try again.", "error");
-                });
             }
         });
 
@@ -115,9 +135,13 @@
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
                 // Create a basic profile in Firestore for the new user
-                const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
-                await setDoc(userProfileRef, { status: 'free', createdAt: new Date() });
-                showMessage("Signed up and logged in successfully!", "success");
+                if (db) {
+                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
+                    await setDoc(userProfileRef, { status: 'free', createdAt: new Date() });
+                    showMessage("Signed up and logged in successfully!", "success");
+                } else {
+                    showMessage("Signed up, but Firestore is not available to save profile.", "info");
+                }
             } catch (error) {
                 console.error("Error signing up:", error);
                 showMessage(`Sign Up Failed: ${error.message}`, "error");
@@ -144,10 +168,7 @@
             try {
                 await signOut(auth);
                 showMessage("Signed out successfully!", "info");
-                // After signing out, sign in anonymously again to allow basic interaction
-                signInAnonymously(auth).catch((error) => {
-                    console.error("Error signing in anonymously after sign out:", error);
-                });
+                // No anonymous sign-in after sign out as requested
             } catch (error) {
                 console.error("Error signing out:", error);
                 showMessage(`Sign Out Failed: ${error.message}`, "error");
@@ -193,10 +214,14 @@
             }
 
             try {
-                const userProfileRef = doc(db, `artifacts/${window.appId}/users/${window.currentUserId}/profile/membership`);
-                await setDoc(userProfileRef, { status: 'premium', activatedAt: new Date() }, { merge: true });
-                showMessage("Membership activated! Welcome, Premium Chef!", "success");
-                document.getElementById('confirmMembershipBtn').style.display = 'none'; // Hide button after activation
+                if (db) {
+                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${window.currentUserId}/profile/membership`);
+                    await setDoc(userProfileRef, { status: 'premium', activatedAt: new Date() }, { merge: true });
+                    showMessage("Membership activated! Welcome, Premium Chef!", "success");
+                    document.getElementById('confirmMembershipBtn').style.display = 'none'; // Hide button after activation
+                } else {
+                    showMessage("Firestore is not available to confirm membership.", "error");
+                }
             } catch (error) {
                 console.error("Error confirming membership:", error);
                 showMessage(`Failed to activate membership: ${error.message}`, "error");
@@ -208,10 +233,10 @@
             const recipeLinks = document.querySelectorAll('.post-thumbnail, .highlight-circle');
             recipeLinks.forEach(link => {
                 const recipeId = link.dataset.recipe;
-                // Define premium recipes
-                const premiumRecipes = ['mochi-donuts', 'cheesecake', 'blueberry-waffles', 'hamburger', 'fried-chicken'];
+                // Define premium recipes based on recipeData.isPremium
+                const isRecipePremium = recipeData[recipeId] && recipeData[recipeId].isPremium;
                 
-                if (premiumRecipes.includes(recipeId) && !window.isPremiumMember) {
+                if (isRecipePremium && !window.isPremiumMember) {
                     link.classList.add('opacity-50', 'cursor-not-allowed');
                     link.onclick = (e) => {
                         e.preventDefault();
@@ -220,18 +245,22 @@
                 } else {
                     link.classList.remove('opacity-50', 'cursor-not-allowed');
                     link.onclick = null; // Remove previous click handler if it was restricted
-                    // Re-add the original navigation handler
-                    link.addEventListener('click', () => {
-                        const recipeId = link.dataset.recipe;
-                        if (recipeId) {
-                            activeRecipeId = recipeId;
-                            document.querySelectorAll('.recipe-view > div').forEach(div => div.classList.add('hidden'));
-                            document.getElementById(`${activeRecipeId}-recipe`).classList.remove('hidden');
-                            document.getElementById('recipe-container').classList.add('active');
-                            document.getElementById('profile-view').classList.remove('active');
-                            updateRecipeView(activeRecipeId);
-                        }
-                    });
+                    // Re-add the original navigation handler if not already present
+                    // This prevents adding multiple listeners if updateRecipeAccess is called multiple times
+                    if (!link.dataset.hasClickListener) {
+                        link.addEventListener('click', () => {
+                            const recipeId = link.dataset.recipe;
+                            if (recipeId) {
+                                activeRecipeId = recipeId;
+                                document.querySelectorAll('.recipe-view > div').forEach(div => div.classList.add('hidden'));
+                                document.getElementById(`${activeRecipeId}-recipe`).classList.remove('hidden');
+                                document.getElementById('recipe-container').classList.add('active');
+                                document.getElementById('profile-view').classList.remove('active');
+                                updateRecipeView(activeRecipeId);
+                            }
+                        });
+                        link.dataset.hasClickListener = 'true'; // Mark that a listener has been added
+                    }
                 }
             });
         }
@@ -873,7 +902,68 @@
                 </section>
             </div>
 
-
+            <!-- Hamburger Recipe -->
+            <div id="hamburger-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <section id="intro-hamburger">
+                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
+                        <span class="text-4xl mr-3">🍔</span> Pip's Super Cute Hamburger! <span class="text-4xl ml-3">🍟</span>
+                    </h2>
+                    <p class="text-stone-600 text-center leading-relaxed">
+                        Get ready for a tiny, delicious, and utterly adorable meal! Pip, our master chef, is assembling his very own "Hamburger" – a hamster-safe version, of course! Prepare for layers of cuteness and culinary precision.
+                    </p>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-amber-100 rounded-lg p-6">
+                        <div id="steps-container-hamburger" class="relative min-h-[400px]">
+                            <div id="hamburger-step-1" class="step-panel active">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: The "Bun" Base!</h3>
+                                <p class="text-stone-700">Pip starts by preparing his "bun" halves. These are carefully crafted from compressed, finely ground hamster pellets, shaped into perfect little circles. He's making sure they're just the right size for his tiny paws!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/TDtkyw8.jpeg" alt="Pip preparing hamburger bun" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="hamburger-step-2" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: The "Patty" Perfection!</h3>
+                                <p class="text-stone-700">Next, it's time for the star of the show: the "patty"! Pip is meticulously forming a disc from a mixture of finely ground hamster pellets and a tiny bit of safe, plain vegetable puree (like pea or carrot). He's pressing it just right for that perfect burger shape.</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/s6m1o3m.jpeg" alt="Pip making hamburger patty" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="hamburger-step-3" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: Adding the "Cheese" and "Lettuce"!</h3>
+                                <p class="text-stone-700">Now for the delicious toppings! Pip carefully places a tiny piece of dried, unsweetened fruit (like a thin slice of apple) for the "cheese," and a small, fresh piece of dark leafy green (like spinach) for the "lettuce." He's building layers of flavor and fun!</p>
+                                <div class="text-5xl text-center mt-6">🧀🥬</div>
+                            </div>
+                            <div id="hamburger-step-4" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: Assembling the Burger!</h3>
+                                <p class="text-stone-700">With all the components ready, Pip carefully places the "patty" and "toppings" onto one "bun" half, then crowns it with the other. He's making sure his masterpiece is perfectly aligned and ready for its grand reveal!</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/rWv186u.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                            <div id="hamburger-step-5" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: The Big Bite!</h3>
+                                <p class="text-stone-700">The moment of truth! Pip takes a triumphant bite out of his super cute "hamburger." The layers, the textures, the hamster-safe flavors – it's all a huge success! He's one satisfied little chef.</p>
+                                <div class="text-5xl text-center mt-6">🍔😋</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
+                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
+                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
+                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
+                        <p class="mt-2">Remember, while this was a fun, imaginary cooking adventure, <strong>hamsters should NEVER eat human hamburgers, meat, cheese, greasy foods, or processed buns!</strong> These are extremely dangerous for them. Pip's "hamburger" was made entirely of hamster-safe ingredients like pellets, vegetable puree, and tiny pieces of safe fruit/veg. Always research what foods are safe and appropriate for your pet!</p>
+                    </div>
+                </section>
+            </div>
         </div>
 
     </div>
