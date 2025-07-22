@@ -8,9 +8,9 @@
     <!-- Firebase SDKs -->
     <script type="module">
         // Import Firebase modules
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global variables for Firebase instances and user data
         // Use __app_id and __firebase_config provided by the Canvas environment
@@ -59,6 +59,15 @@
                     showMessage("Failed to sign in automatically. Please try again or use email/password.", "error");
                     // No anonymous fallback as requested
                 }
+            } else if (typeof __initial_auth_token === 'undefined' && !user) {
+                // If no custom token, sign in anonymously
+                try {
+                    await signInAnonymously(auth);
+                    // User will be set by the onAuthStateChanged listener after this
+                } catch (error) {
+                    console.error("Error signing in anonymously:", error);
+                    showMessage("Failed to sign in anonymously. Please try again.", "error");
+                }
             }
 
             if (user) {
@@ -68,10 +77,15 @@
                 document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
 
                 // Display full userId for multi-user apps (as per instructions)
-                const fullUserIdDisplay = document.createElement('p');
-                fullUserIdDisplay.className = "text-sm text-gray-500 mt-1";
-                fullUserIdDisplay.textContent = `User ID: ${user.uid}`;
-                userIdDisplay.parentNode.insertBefore(fullUserIdDisplay, userIdDisplay.nextSibling);
+                const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
+                if (existingFullUserIdDisplay) {
+                    existingFullUserIdDisplay.textContent = `User ID: ${user.uid}`;
+                } else {
+                    const fullUserIdDisplay = document.createElement('p');
+                    fullUserIdDisplay.className = "text-sm text-gray-500 mt-1 full-user-id-display";
+                    fullUserIdDisplay.textContent = `User ID: ${user.uid}`;
+                    userIdDisplay.parentNode.insertBefore(fullUserIdDisplay, userIdDisplay.nextSibling);
+                }
 
 
                 // Check membership status in Firestore
@@ -121,6 +135,11 @@
                 activateMembershipBtn.style.display = 'none'; // Only show after anonymous login
                 confirmMembershipBtn.style.display = 'none';
                 loginSignupMessage.textContent = 'Sign in or sign up to save your progress and access premium features.';
+
+                const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
+                if (existingFullUserIdDisplay) {
+                    existingFullUserIdDisplay.remove(); // Remove if user logs out
+                }
             }
         });
 
@@ -228,13 +247,102 @@
             }
         }
 
+        // Global recipe data for access control
+        const recipeData = {
+            'brownies': {
+                totalSteps: 4,
+                currentStep: 1,
+                containerId: 'brownies-recipe',
+                stepsContainerId: 'steps-container-brownies',
+                isPremium: false // Brownies are free
+            },
+            'pancakes': {
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'pancakes-recipe',
+                stepsContainerId: 'steps-container-pancakes',
+                isPremium: false // Pancakes are free
+            },
+            'mochi-donuts': {
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'mochi-donuts-recipe',
+                stepsContainerId: 'steps-container-mochi-donuts',
+                isPremium: true // Premium
+            },
+            'cheesecake': {
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'cheesecake-recipe',
+                stepsContainerId: 'steps-container-cheesecake',
+                isPremium: true // Premium
+            },
+            'blueberry-waffles': {
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'blueberry-waffles-recipe',
+                stepsContainerId: 'steps-container-blueberry-waffles',
+                isPremium: true // Premium
+            },
+            'hamburger': {
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'hamburger-recipe',
+                stepsContainerId: 'steps-container-hamburger',
+                isPremium: true // Premium
+            },
+            'fried-chicken': {
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'fried-chicken-recipe',
+                stepsContainerId: 'steps-container-fried-chicken',
+                isPremium: true // Premium
+            },
+            'carrot-cake': {
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'carrot-cake-recipe',
+                stepsContainerId: 'steps-container-carrot-cake',
+                isPremium: true // Premium
+            },
+            'sunflower-seed-bread': {
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'sunflower-seed-bread-recipe',
+                stepsContainerId: 'steps-container-sunflower-seed-bread',
+                isPremium: true // Premium
+            },
+            'apple-pie': {
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'apple-pie-recipe',
+                stepsContainerId: 'steps-container-apple-pie',
+                isPremium: false // Apple Pie is now FREE
+            },
+            'peanut-butter-bites': {
+                totalSteps: 4,
+                currentStep: 1,
+                containerId: 'peanut-butter-bites-recipe',
+                stepsContainerId: 'steps-container-peanut-butter-bites',
+                isPremium: true // New Premium Recipe
+            },
+            'veggie-delight-skewers': {
+                totalSteps: 3,
+                currentStep: 1,
+                containerId: 'veggie-delight-skewers-recipe',
+                stepsContainerId: 'steps-container-veggie-delight-skewers',
+                isPremium: true // New Premium Recipe
+            }
+        };
+        window.recipeData = recipeData; // Make recipeData globally accessible for updateRecipeAccess
+
         // Function to update recipe access based on membership status
         function updateRecipeAccess() {
             const recipeLinks = document.querySelectorAll('.post-thumbnail, .highlight-circle');
             recipeLinks.forEach(link => {
                 const recipeId = link.dataset.recipe;
                 // Define premium recipes based on recipeData.isPremium
-                const isRecipePremium = recipeData[recipeId] && recipeData[recipeId].isPremium;
+                const isRecipePremium = window.recipeData[recipeId] && window.recipeData[recipeId].isPremium;
                 
                 if (isRecipePremium && !window.isPremiumMember) {
                     link.classList.add('opacity-50', 'cursor-not-allowed');
@@ -466,12 +574,33 @@
                         <div class="highlight-circle" data-recipe="blueberry-waffles">🧇</div>
                         <span class="text-sm text-stone-600 mt-2">Waffles</span>
                     </div>
+                    <div class="flex flex-col items-center">
+                        <div class="highlight-circle" data-recipe="carrot-cake">🥕</div>
+                        <span class="text-sm text-stone-600 mt-2">Carrot Cake</span>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="highlight-circle" data-recipe="sunflower-seed-bread">🌻</div>
+                        <span class="text-sm text-stone-600 mt-2">Sunflower Bread</span>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="highlight-circle" data-recipe="apple-pie">🍎</div>
+                        <span class="text-sm text-stone-600 mt-2">Apple Pie</span>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="highlight-circle" data-recipe="peanut-butter-bites">🥜</div>
+                        <span class="text-sm text-stone-600 mt-2">PB Bites</span>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <div class="highlight-circle" data-recipe="veggie-delight-skewers">🍡</div>
+                        <span class="text-sm text-stone-600 mt-2">Veggie Skewers</span>
+                    </div>
                 </div>
             </section>
 
             <section id="posts">
                 <h2 class="text-xl font-bold text-amber-800 mb-4">Latest Posts</h2>
                 <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <!-- Page 1 Recipes -->
                     <div class="post-thumbnail" data-recipe="fried-chicken">
                         <img src="https://i.imgur.com/U6OTflt.jpeg" alt="Pip's Fried Chicken Post">
                         <div class="post-title-overlay">Crispy "Fried Chicken"!</div>
@@ -500,6 +629,36 @@
                         <img src="https://placehold.co/600x600/FBD38D/7B341E?text=Brownies" alt="Pip's Brownies Post">
                         <div class="post-title-overlay">Brownies</div>
                     </div>
+
+                    <!-- Page 2 Recipes (initially hidden) -->
+                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="carrot-cake">
+                        <img src="https://i.imgur.com/YEwYYPv.jpeg" alt="Pip's Carrot Cake Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Carrot+Cake';">
+                        <div class="post-title-overlay">Delightful Carrot Cake!</div>
+                    </div>
+                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="sunflower-seed-bread">
+                        <img src="https://i.imgur.com/4QV9P4h.jpeg" alt="Pip's Sunflower Seed Bread Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Sunflower+Seed+Bread';">
+                        <div class="post-title-overlay">Hearty Sunflower Seed Bread!</div>
+                    </div>
+                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="apple-pie">
+                        <img src="https://i.imgur.com/LQYetF5.jpeg" alt="Pip's Apple Pie Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Apple+Pie';">
+                        <div class="post-title-overlay">Sweet Apple Pie!</div>
+                    </div>
+                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="peanut-butter-bites">
+                        <img src="https://i.imgur.com/5I4alu7.jpeg" alt="Pip's Peanut Butter Bites Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Peanut+Butter+Bites';">
+                        <div class="post-title-overlay">Nutty Peanut Butter Bites!</div>
+                    </div>
+                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="veggie-delight-skewers">
+                        <!-- Video thumbnail for Veggie Delight Skewers -->
+                        <video autoplay loop muted playsinline poster="https://i.imgur.com/A39urWa.jpeg" class="absolute top-0 left-0 w-full h-full object-cover rounded-xl">
+                            <source src="https://i.imgur.com/5OkFaxs.mp4" type="video/mp4">
+                            Your browser does not not support the video tag.
+                        </video>
+                        <div class="post-title-overlay">Colorful Veggie Skewers!</div>
+                    </div>
+                </div>
+                <div class="text-center mt-6">
+                    <button id="loadMoreBtn" class="btn bg-amber-600 hover:bg-amber-700">Load More Recipes</button>
+                    <button id="hideRecipesBtn" class="btn bg-stone-400 hover:bg-stone-500 hidden ml-4">Hide Recipes</button>
                 </div>
             </section>
         </div>
@@ -666,8 +825,7 @@
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: The Legendary Flip!</h3>
                                 <p class="text-stone-700">This is where the magic happens! Pip, with surprising agility, demonstrates his incredible pancake-flipping skills. Watch him go – a perfect flip every time! It's truly a sight to behold.</p>
                                 <div class="video-container mx-auto max-w-xl">
-                                    <video controls autoplay loop muted playsinline>
-                                        <source src="https://i.imgur.com/ozP8slo.mp4" type="video/mp4">
+                                    <source src="https://i.imgur.com/ozP8slo.mp4" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                 </div>
@@ -698,7 +856,7 @@
                 <section class="mt-10">
                     <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
                         <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
-                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human sugar, chocolate, or processed foods!</strong> These are very dangerous for them. Pip's "pancakes" were made entirely of hamster-safe ingredients like pellets, mashed banana, and a tiny blueberry. Always research what foods are safe for your pet!</p>
+                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human sugar, chocolate, or processed foods!</strong> These are very dangerous for them. Pip's "pancakes" were made entirely of hamster-safe ingredients. Always research what foods are safe for your pet!</p>
                     </div>
                 </section>
             </div>
@@ -919,14 +1077,17 @@
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: The "Bun" Base!</h3>
                                 <p class="text-stone-700">Pip starts by preparing his "bun" halves. These are carefully crafted from compressed, finely ground hamster pellets, shaped into perfect little circles. He's making sure they're just the right size for his tiny paws!</p>
                                 <div class="image-container mx-auto max-w-xl">
-                                    <img src="https://i.imgur.com/TDtkyw8.jpeg" alt="Pip preparing hamburger bun" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                    <img src="https://i.imgur.com/RCl3c2J.jpeg" alt="Pip preparing hamburger bun" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
                                 </div>
                             </div>
                             <div id="hamburger-step-2" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: The "Patty" Perfection!</h3>
                                 <p class="text-stone-700">Next, it's time for the star of the show: the "patty"! Pip is meticulously forming a disc from a mixture of finely ground hamster pellets and a tiny bit of safe, plain vegetable puree (like pea or carrot). He's pressing it just right for that perfect burger shape.</p>
-                                <div class="image-container mx-auto max-w-xl">
-                                    <img src="https://i.imgur.com/s6m1o3m.jpeg" alt="Pip making hamburger patty" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/KNSRyaj.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
                                 </div>
                             </div>
                             <div id="hamburger-step-3" class="step-panel">
@@ -939,7 +1100,7 @@
                                 <p class="text-stone-700">With all the components ready, Pip carefully places the "patty" and "toppings" onto one "bun" half, then crowns it with the other. He's making sure his masterpiece is perfectly aligned and ready for its grand reveal!</p>
                                 <div class="video-container mx-auto max-w-xl">
                                     <video controls autoplay loop muted playsinline>
-                                        <source src="https://i.imgur.com/rWv186u.mp4" type="video/mp4">
+                                        <source src="https://i.imgur.com/VnS0vJ9.mp4" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                 </div>
@@ -964,6 +1125,322 @@
                     </div>
                 </section>
             </div>
+
+            <!-- Carrot Cake Recipe -->
+            <div id="carrot-cake-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <section id="intro-carrot-cake">
+                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
+                        <span class="text-4xl mr-3">🥕</span> Pip's Carrot Cake Charm! <span class="text-4xl ml-3">🍰</span>
+                    </h2>
+                    <p class="text-stone-600 text-center leading-relaxed">
+                        Get ready for a sweet and wholesome treat! Pip is whipping up his very own "Carrot Cake" – a hamster-safe delight packed with natural goodness. This is one recipe that will make any tiny chef proud!
+                    </p>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-amber-100 rounded-lg p-6">
+                        <div id="steps-container-carrot-cake" class="relative min-h-[400px]">
+                            <div id="carrot-cake-step-1" class="step-panel active">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: Grating the Goodness!</h3>
+                                <p class="text-stone-700">Pip starts by carefully preparing his main ingredient: fresh, finely grated carrot! He's making sure every shred is perfect for his wholesome cake.</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/URPQRMP.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                            <div id="carrot-cake-step-2" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Mixing the Batter!</h3>
+                                <p class="text-stone-700">Next, Pip combines the grated carrot with finely ground hamster pellets and a tiny bit of water to form a moist, delicious batter. He's mixing it with all his might!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/DrfcmCY.jpeg" alt="Pip mixing carrot cake batter" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="carrot-cake-step-3" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: Shaping the Cake!</h3>
+                                <p class="text-stone-700">Pip carefully presses the mixture into a tiny cake shape. He's envisioning the perfect little slice of carrot cake!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/YEwYYPv.jpeg" alt="Pip shaping carrot cake" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="carrot-cake-step-4" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: "Baking" and Cooling!</h3>
+                                <p class="text-stone-700">The cake is gently air-dried to firm up, ensuring it holds its shape. Pip patiently waits for his masterpiece to be ready.</p>
+                                <div class="text-5xl text-center mt-6">🌬️</div>
+                            </div>
+                            <div id="carrot-cake-step-5" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: The Sweet Taste Test!</h3>
+                                <p class="text-stone-700">Finally, the moment of truth! Pip enjoys a bite of his wholesome "Carrot Cake." It's a delightful success!</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/mHgofh5.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
+                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
+                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
+                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
+                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human carrot cake, sugar, or dairy products!</strong> These are very dangerous for them. Pip's "carrot cake" was made entirely of hamster-safe ingredients. Always research what foods are safe and appropriate for your pet!</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Sunflower Seed Bread Recipe -->
+            <div id="sunflower-seed-bread-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <section id="intro-sunflower-seed-bread">
+                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
+                        <span class="text-4xl mr-3">🌻</span> Pip's Hearty Sunflower Seed Bread! <span class="text-4xl ml-3">🍞</span>
+                    </h2>
+                    <p class="text-stone-600 text-center leading-relaxed">
+                        Join Pip for a wholesome baking journey as he crafts his very own "Sunflower Seed Bread"! This nutty, crunchy treat is packed with hamster-friendly goodness.
+                    </p>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-amber-100 rounded-lg p-6">
+                        <div id="steps-container-sunflower-seed-bread" class="relative min-h-[400px]">
+                            <div id="sunflower-seed-bread-step-1" class="step-panel active">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: Crushing the Seeds!</h3>
+                                <p class="text-stone-700">Pip begins by carefully crushing tiny, unsalted sunflower seeds. He knows these are the key to his bread's hearty flavor!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/4QV9P4h.jpeg" alt="Pip crushing sunflower seeds" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="sunflower-seed-bread-step-2" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Mixing the Dough!</h3>
+                                <p class="text-stone-700">The crushed seeds are mixed with finely ground hamster pellets and a touch of water to form a stiff dough. Pip is kneading with all his might!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/DwV3FVJ.jpeg" alt="Pip mixing sunflower seed bread dough" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="sunflower-seed-bread-step-3" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: Shaping the Loaf!</h3>
+                                <p class="text-stone-700">Pip meticulously shapes the dough into a miniature bread loaf. It's going to be a perfect, tiny masterpiece!</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/WFOs9WM.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                            <div id="sunflower-seed-bread-step-4" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: "Baking" to Perfection!</h3>
+                                <p class="text-stone-700">The loaf is gently air-dried until it's firm and ready. Pip's patience is truly admirable!</p>
+                                <div class="text-5xl text-center mt-6">☀️</div>
+                            </div>
+                            <div id="sunflower-seed-bread-step-5" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: The Hearty Taste Test!</h3>
+                                <p class="text-stone-700">Pip takes a satisfying bite of his homemade "Sunflower Seed Bread." The crunch and flavor are exactly what he hoped for!</p>
+                                <div class="text-5xl text-center mt-6">🤤</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
+                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
+                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
+                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
+                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human bread, yeast, sugar, or heavily processed grains!</strong> Sunflower seeds should be given in very small, infrequent amounts as a treat. Pip's "sunflower seed bread" was made entirely of hamster-safe ingredients. Always research what foods are safe and appropriate for your pet!</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Apple Pie Recipe -->
+            <div id="apple-pie-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <section id="intro-apple-pie">
+                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
+                        <span class="text-4xl mr-3">🍎</span> Pip's Sweet Apple Pie! <span class="text-4xl ml-3">🥧</span>
+                    </h2>
+                    <p class="text-stone-600 text-center leading-relaxed">
+                        Join Pip for a delightful baking adventure as he creates his very own "Apple Pie" – a hamster-safe version of a classic dessert! Get ready for tiny, sweet perfection.
+                    </p>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-amber-100 rounded-lg p-6">
+                        <div id="steps-container-apple-pie" class="relative min-h-[400px]">
+                            <div id="apple-pie-step-1" class="step-panel active">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: Preparing the "Apples"!</h3>
+                                <p class="text-stone-700">Pip starts by carefully dicing tiny pieces of fresh apple (seeds removed, as they are toxic!). These will be the sweet filling for his pie.</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/LQYetF5.jpeg" alt="Pip preparing apples for pie" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="apple-pie-step-2" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Crafting the "Crust"!</h3>
+                                <p class="text-stone-700">For the "crust," Pip mixes finely ground hamster biscuits with a tiny bit of water to form a pliable dough. He's carefully pressing it into a miniature pie dish.</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/rtssHlF.jpeg" alt="Pip crafting pie crust" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="apple-pie-step-3" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: Assembling the Pie!</h3>
+                                <p class="text-stone-700">Pip meticulously fills the "crust" with his diced apples, then adds a top layer of "crust" to complete his tiny pie. What a masterpiece!</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/3E4t6Sv.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                            <div id="apple-pie-step-4" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: "Baking" and Cooling!</h3>
+                                <p class="text-stone-700">The pie is gently air-dried to firm up the crust and allow the apple flavors to meld. Pip patiently waits for his sweet treat to be ready.</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/5HRxQbi.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                            <div id="apple-pie-step-5" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: The Sweetest Taste Test!</h3>
+                                <p class="text-stone-700">Pip takes a joyful bite of his homemade "Apple Pie." The natural sweetness of the apple and the crunchy crust are a perfect combination!</p>
+                                <div class="text-5xl text-center mt-6">🍎😋</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
+                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
+                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
+                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
+                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human apple pie, sugar, spices (like cinnamon in large amounts), or processed crusts!</strong> Apple seeds are toxic and must be removed. Pip's "apple pie" was made entirely of hamster-safe ingredients. Always research what foods are safe and appropriate for your pet!</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- New Recipe: Peanut Butter Bites -->
+            <div id="peanut-butter-bites-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <section id="intro-peanut-butter-bites">
+                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
+                        <span class="text-4xl mr-3">🥜</span> Pip's Nutty Peanut Butter Bites! <span class="text-4xl ml-3">🌰</span>
+                    </h2>
+                    <p class="text-stone-600 text-center leading-relaxed">
+                        Get ready for a protein-packed treat! Pip is making his favorite "Peanut Butter Bites" – a special, safe version for hamsters, of course! These are perfect for a quick energy boost.
+                    </p>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-amber-100 rounded-lg p-6">
+                        <div id="steps-container-peanut-butter-bites" class="relative min-h-[400px]">
+                            <div id="peanut-butter-bites-step-1" class="step-panel active">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: The Nutty Base!</h3>
+                                <p class="text-stone-700">Pip starts with a tiny dab of unsweetened, unsalted, hamster-safe peanut butter (check ingredients carefully!). He mixes it with finely ground oats for texture.</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/5I4alu7.jpeg" alt="Pip preparing peanut butter base" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="peanut-butter-bites-step-2" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Rolling the Bites!</h3>
+                                <p class="text-stone-700">With his tiny paws, Pip meticulously rolls the mixture into small, bite-sized balls. He's making sure each one is perfectly round!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/OLVQ9j7.jpeg" alt="Pip rolling peanut butter bites" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="peanut-butter-bites-step-3" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: Chilling for Firmness!</h3>
+                                <p class="text-stone-700">The little bites need to chill to firm up. Pip patiently waits, knowing good things come to those who wait!</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/KNSRyaj.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                            <div id="peanut-butter-bites-step-4" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: The Protein Power-Up!</h3>
+                                <p class="text-stone-700">Ready for a treat! Pip enjoys his nutty peanut butter bites. They're a delicious and safe snack for a busy hamster chef.</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/VnS0vJ9.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
+                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 4</div>
+                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
+                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
+                        <p class="mt-2">Remember, while this was a fun, imaginary cooking adventure, <strong>hamsters should NEVER eat human peanut butter with sugar, salt, or xylitol!</strong> Only tiny amounts of unsweetened, unsalted, xylitol-free peanut butter are safe as a very rare treat. Always research what foods are safe and appropriate for your pet!</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- New Recipe: Veggie Delight Skewers -->
+            <div id="veggie-delight-skewers-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <section id="intro-veggie-delight-skewers">
+                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
+                        <span class="text-4xl mr-3">🍡</span> Pip's Colorful Veggie Delight Skewers! <span class="text-4xl ml-3">🥕</span>
+                    </h2>
+                    <p class="text-stone-600 text-center leading-relaxed">
+                        Get ready for a burst of freshness! Pip is assembling his vibrant "Veggie Delight Skewers" – a healthy and fun treat packed with his favorite safe vegetables.
+                    </p>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-amber-100 rounded-lg p-6">
+                        <div id="steps-container-veggie-delight-skewers" class="relative min-h-[400px]">
+                            <div id="veggie-delight-skewers-step-1" class="step-panel active">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: Prepping the Veggies!</h3>
+                                <p class="text-stone-700">Pip carefully selects and prepares tiny pieces of hamster-safe vegetables like carrot, cucumber, and bell pepper. He's making sure each piece is perfectly sized for his skewers!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/A39urWa.jpeg" alt="Pip prepping veggies for skewers" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="veggie-delight-skewers-step-2" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Assembling the Skewers!</h3>
+                                <p class="text-stone-700">Using tiny, blunt wooden sticks (or even a sturdy piece of hay!), Pip meticulously threads the colorful veggie pieces onto his skewers. It's a work of art!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/lk40FsC.jpeg" alt="Pip assembling veggie skewers" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="veggie-delight-skewers-step-3" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: The Fresh Feast!</h3>
+                                <p class="text-stone-700">Voila! Pip proudly presents and enjoys his fresh veggie skewers. A healthy and delightful snack for any discerning hamster!</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/5OkFaxs.mp4" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
+                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 3</div>
+                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
+                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
+                        <p class="mt-2">Remember, while this was a fun, imaginary cooking adventure, <strong>always ensure all vegetables are safe for hamsters and given in moderation!</strong> Avoid onions, garlic, citrus, and any moldy or spoiled produce. Only use blunt, safe skewers if providing them to your pet. Always research what foods are safe and appropriate for your pet!</p>
+                    </div>
+                </section>
+            </div>
+
         </div>
 
     </div>
@@ -973,59 +1450,11 @@
             const profileView = document.getElementById('profile-view');
             const recipeContainer = document.getElementById('recipe-container');
             const backToProfileBtn = document.getElementById('back-to-profile-btn');
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            const hideRecipesBtn = document.getElementById('hideRecipesBtn');
+            const page2Recipes = document.querySelectorAll('.page-2-recipe');
 
-            const recipeData = {
-                'brownies': {
-                    totalSteps: 4,
-                    currentStep: 1,
-                    containerId: 'brownies-recipe',
-                    stepsContainerId: 'steps-container-brownies',
-                    isPremium: false // Brownies are free
-                },
-                'pancakes': {
-                    totalSteps: 5,
-                    currentStep: 1,
-                    containerId: 'pancakes-recipe',
-                    stepsContainerId: 'steps-container-pancakes',
-                    isPremium: false // Pancakes are free
-                },
-                'mochi-donuts': {
-                    totalSteps: 5,
-                    currentStep: 1,
-                    containerId: 'mochi-donuts-recipe',
-                    stepsContainerId: 'steps-container-mochi-donuts',
-                    isPremium: true // Premium
-                },
-                'cheesecake': {
-                    totalSteps: 5,
-                    currentStep: 1,
-                    containerId: 'cheesecake-recipe',
-                    stepsContainerId: 'steps-container-cheesecake',
-                    isPremium: true // Premium
-                },
-                'blueberry-waffles': {
-                    totalSteps: 5,
-                    currentStep: 1,
-                    containerId: 'blueberry-waffles-recipe',
-                    stepsContainerId: 'steps-container-blueberry-waffles',
-                    isPremium: true // Premium
-                },
-                'hamburger': {
-                    totalSteps: 5,
-                    currentStep: 1,
-                    containerId: 'hamburger-recipe',
-                    stepsContainerId: 'steps-container-hamburger',
-                    isPremium: true // Premium
-                },
-                'fried-chicken': {
-                    totalSteps: 5,
-                    currentStep: 1,
-                    containerId: 'fried-chicken-recipe',
-                    stepsContainerId: 'steps-container-fried-chicken',
-                    isPremium: true // Premium
-                }
-            };
-
+            // recipeData is now globally available via window.recipeData
             let activeRecipeId = null;
 
             function showView(viewId) {
@@ -1036,7 +1465,7 @@
             }
 
             function updateRecipeView(recipeId) {
-                const recipe = recipeData[recipeId];
+                const recipe = window.recipeData[recipeId]; // Access from global window.recipeData
                 const stepsContainer = document.getElementById(recipe.stepsContainerId);
                 const stepPanels = stepsContainer.querySelectorAll('.step-panel');
                 const prevBtn = stepsContainer.closest('.bg-amber-100').querySelector('.prev-btn');
@@ -1073,7 +1502,7 @@
                 if (!recipeElement) return;
 
                 const recipeId = recipeElement.id.replace('-recipe', '');
-                const recipe = recipeData[recipeId];
+                const recipe = window.recipeData[recipeId]; // Access from global window.recipeData
 
                 if (button.classList.contains('next-btn')) {
                     if (recipe.currentStep < recipe.totalSteps) {
@@ -1106,7 +1535,7 @@
             document.querySelectorAll('.highlight-circle').forEach(circle => {
                 circle.addEventListener('click', () => {
                     const recipeId = circle.dataset.recipe;
-                    if (recipeData[recipeId].isPremium && !window.isPremiumMember) {
+                    if (window.recipeData[recipeId].isPremium && !window.isPremiumMember) {
                         showMessage("Upgrade to Premium to unlock this recipe!", "error");
                         return;
                     }
@@ -1124,7 +1553,7 @@
                 thumbnail.addEventListener('click', () => {
                     const recipeId = thumbnail.dataset.recipe;
                     if (recipeId) { // Only navigate if data-recipe attribute exists
-                        if (recipeData[recipeId].isPremium && !window.isPremiumMember) {
+                        if (window.recipeData[recipeId].isPremium && !window.isPremiumMember) {
                             showMessage("Upgrade to Premium to unlock this recipe!", "error");
                             return;
                         }
@@ -1151,9 +1580,25 @@
                 profileView.classList.add('active');
                 // Reset current step for the last viewed recipe when going back to profile
                 if (activeRecipeId) {
-                    recipeData[activeRecipeId].currentStep = 1;
+                    window.recipeData[activeRecipeId].currentStep = 1; // Access from global window.recipeData
                 }
                 activeRecipeId = null;
+            });
+
+            // Load More Recipes button functionality
+            loadMoreBtn.addEventListener('click', () => {
+                page2Recipes.forEach(recipe => recipe.classList.remove('hidden'));
+                loadMoreBtn.classList.add('hidden');
+                hideRecipesBtn.classList.remove('hidden');
+                updateRecipeAccess(); // Re-apply access rules after showing new recipes
+            });
+
+            // Hide Recipes button functionality
+            hideRecipesBtn.addEventListener('click', () => {
+                page2Recipes.forEach(recipe => recipe.classList.add('hidden'));
+                hideRecipesBtn.classList.add('hidden');
+                loadMoreBtn.classList.remove('hidden');
+                updateRecipeAccess(); // Re-apply access rules after hiding recipes
             });
 
             // Initial view setup
