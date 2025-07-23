@@ -38,215 +38,6 @@
         // Stripe Payment Link ID from user query
         window.stripePaymentLink = "https://buy.stripe.com/bJe3cwagjgPH9o98G34gg00"; // Updated payment link
 
-        // Listen for auth state changes
-        onAuthStateChanged(auth, async (user) => {
-            const userIdDisplay = document.getElementById('userIdDisplay');
-            const membershipStatusDisplay = document.getElementById('membershipStatusDisplay');
-            const authButtons = document.getElementById('authButtons');
-            const activateMembershipBtn = document.getElementById('activateMembershipBtn');
-            const confirmMembershipBtn = document.getElementById('confirmMembershipBtn');
-            const emailInput = document.getElementById('emailInput');
-            const passwordInput = document.getElementById('passwordInput');
-            const loginSignupMessage = document.getElementById('loginSignupMessage');
-
-            // Attempt to sign in with custom token first if available
-            if (typeof __initial_auth_token !== 'undefined' && !user) {
-                try {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                    // User will be set by the onAuthStateChanged listener after this
-                } catch (error) {
-                    console.error("Error signing in with custom token:", error);
-                    showMessage("Failed to sign in automatically. Please try again or use email/password.", "error");
-                    // No anonymous fallback as requested
-                }
-            } else if (typeof __initial_auth_token === 'undefined' && !user) {
-                // If no custom token, sign in anonymously
-                try {
-                    await signInAnonymously(auth);
-                    // User will be set by the onAuthStateChanged listener after this
-                } catch (error) {
-                    console.error("Error signing in anonymously:", error);
-                    showMessage("Failed to sign in anonymously. Please try again.", "error");
-                }
-            }
-
-            if (user) {
-                window.currentUserId = user.uid;
-                userIdDisplay.textContent = `Logged in as: ${user.isAnonymous ? 'Anonymous' : user.email || user.uid}`; // Show UID for anonymous
-                authButtons.innerHTML = `<button id="signOutBtn" class="btn bg-red-500 hover:bg-red-600">Sign Out</button>`;
-                document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
-
-                // Display full userId for multi-user apps (as per instructions)
-                const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
-                if (existingFullUserIdDisplay) {
-                    existingFullUserIdDisplay.textContent = `User ID: ${user.uid}`;
-                } else {
-                    const fullUserIdDisplay = document.createElement('p');
-                    fullUserIdDisplay.className = "text-sm text-gray-500 mt-1 full-user-id-display";
-                    fullUserIdDisplay.textContent = `User ID: ${user.uid}`;
-                    userIdDisplay.parentNode.insertBefore(fullUserIdDisplay, userIdDisplay.nextSibling);
-                }
-
-
-                // Check membership status in Firestore
-                // Ensure db is initialized before trying to access it
-                if (db) {
-                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
-                    onSnapshot(userProfileRef, (docSnap) => {
-                        if (docSnap.exists() && docSnap.data().status === 'premium') {
-                            window.isPremiumMember = true;
-                            membershipStatusDisplay.textContent = 'Status: Premium Member ✨';
-                            activateMembershipBtn.style.display = 'none';
-                            confirmMembershipBtn.style.display = 'none';
-                            loginSignupMessage.textContent = ''; // Clear message
-                        } else {
-                            window.isPremiumMember = false;
-                            membershipStatusDisplay.textContent = 'Status: Free User';
-                            activateMembershipBtn.style.display = 'inline-block';
-                            confirmMembershipBtn.style.display = 'none'; // Hide confirm until payment link is visited
-                            loginSignupMessage.textContent = 'Upgrade to unlock all recipes!';
-                        }
-                        updateRecipeAccess(); // Update UI based on membership
-                    }, (error) => {
-                        console.error("Error listening to membership status:", error);
-                        window.isPremiumMember = false;
-                        membershipStatusDisplay.textContent = 'Status: Free User (Error loading status)';
-                        updateRecipeAccess();
-                    });
-                } else {
-                    console.warn("Firestore not initialized, cannot check membership status.");
-                    membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
-                    updateRecipeAccess();
-                }
-
-            } else {
-                window.currentUserId = null;
-                window.isPremiumMember = false;
-                userIdDisplay.textContent = 'Not logged in.';
-                membershipStatusDisplay.textContent = 'Status: Free User';
-                authButtons.innerHTML = `
-                    <input type="email" id="emailInput" placeholder="Email" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
-                    <input type="password" id="passwordInput" placeholder="Password" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
-                    <button id="signUpBtn" class="btn bg-blue-500 hover:bg-blue-600">Sign Up</button>
-                    <button id="loginBtn" class="btn bg-green-500 hover:bg-green-600">Log In</button>
-                `;
-                document.getElementById('signUpBtn').addEventListener('click', handleSignUp);
-                document.getElementById('loginBtn').addEventListener('click', handleLogin);
-                activateMembershipBtn.style.display = 'none'; // Only show after anonymous login
-                confirmMembershipBtn.style.display = 'none';
-                loginSignupMessage.textContent = 'Sign in or sign up to save your progress and access premium features.';
-
-                const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
-                if (existingFullUserIdDisplay) {
-                    existingFullUserIdDisplay.remove(); // Remove if user logs out
-                }
-            }
-        });
-
-        async function handleSignUp() {
-            const email = document.getElementById('emailInput').value;
-            const password = document.getElementById('passwordInput').value;
-            if (!email || !password) {
-                showMessage("Please enter email and password.", "error");
-                return;
-            }
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
-                // Create a basic profile in Firestore for the new user
-                if (db) {
-                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
-                    await setDoc(userProfileRef, { status: 'free', createdAt: new Date() });
-                    showMessage("Signed up and logged in successfully!", "success");
-                } else {
-                    showMessage("Signed up, but Firestore is not available to save profile.", "info");
-                }
-            } catch (error) {
-                console.error("Error signing up:", error);
-                showMessage(`Sign Up Failed: ${error.message}`, "error");
-            }
-        }
-
-        async function handleLogin() {
-            const email = document.getElementById('emailInput').value;
-            const password = document.getElementById('passwordInput').value;
-            if (!email || !password) {
-                showMessage("Please enter email and password.", "error");
-                return;
-            }
-            try {
-                await signInWithEmailAndPassword(auth, email, password);
-                showMessage("Logged in successfully!", "success");
-            } catch (error) {
-                console.error("Error logging in:", error);
-                showMessage(`Login Failed: ${error.message}`, "error");
-            }
-        }
-
-        async function handleSignOut() {
-            try {
-                await signOut(auth);
-                showMessage("Signed out successfully!", "info");
-                // No anonymous sign-in after sign out as requested
-            } catch (error) {
-                console.error("Error signing out:", error);
-                showMessage(`Sign Out Failed: ${error.message}`, "error");
-            }
-        }
-
-        function showMessage(msg, type) {
-            const msgBox = document.getElementById('globalMessageBox');
-            msgBox.textContent = msg;
-            msgBox.className = `p-3 rounded-lg text-center font-semibold mt-4 ${type === 'error' ? 'bg-red-100 text-red-700' : type === 'success' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`;
-            msgBox.style.display = 'block';
-            setTimeout(() => {
-                msgBox.style.display = 'none';
-            }, 3000);
-        }
-
-        async function handleActivateMembership() {
-            if (!window.currentUserId) {
-                showMessage("Please sign in or sign up first!", "error");
-                return;
-            }
-            if (window.isPremiumMember) {
-                showMessage("You are already a premium member!", "info");
-                return;
-            }
-
-            // Redirect to Stripe payment link
-            window.open(window.stripePaymentLink, '_blank');
-
-            // Show "Confirm Membership" button after redirection
-            document.getElementById('confirmMembershipBtn').style.display = 'inline-block';
-            showMessage("Please complete your purchase on Stripe. Then click 'Confirm Membership Activation' here.", "info");
-        }
-
-        async function handleConfirmMembership() {
-            if (!window.currentUserId) {
-                showMessage("You must be signed in to confirm membership.", "error");
-                return;
-            }
-            if (window.isPremiumMember) {
-                showMessage("You are already a premium member!", "info");
-                return;
-            }
-
-            try {
-                if (db) {
-                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${window.currentUserId}/profile/membership`);
-                    await setDoc(userProfileRef, { status: 'premium', activatedAt: new Date() }, { merge: true });
-                    showMessage("Membership activated! Welcome, Premium Chef!", "success");
-                    document.getElementById('confirmMembershipBtn').style.display = 'none'; // Hide button after activation
-                } else {
-                    showMessage("Firestore is not available to confirm membership.", "error");
-                }
-            } catch (error) {
-                console.error("Error confirming membership:", error);
-                showMessage(`Failed to activate membership: ${error.message}`, "error");
-            }
-        }
-
         // Global recipe data for access control
         const recipeData = {
             'brownies': {
@@ -318,26 +109,25 @@
                 containerId: 'apple-pie-recipe',
                 stepsContainerId: 'steps-container-apple-pie',
                 isPremium: false // Apple Pie is now FREE
-            },
-            'peanut-butter-bites': {
-                totalSteps: 4,
-                currentStep: 1,
-                containerId: 'peanut-butter-bites-recipe',
-                stepsContainerId: 'steps-container-peanut-butter-bites',
-                isPremium: true // New Premium Recipe
-            },
-            'veggie-delight-skewers': {
-                totalSteps: 3,
-                currentStep: 1,
-                containerId: 'veggie-delight-skewers-recipe',
-                stepsContainerId: 'steps-container-veggie-delight-skewers',
-                isPremium: true // New Premium Recipe
             }
         };
         window.recipeData = recipeData; // Make recipeData globally accessible for updateRecipeAccess
 
+        // Function to show messages in a global message box
+        // Made globally accessible by attaching to window
+        window.showMessage = function(msg, type) {
+            const msgBox = document.getElementById('globalMessageBox');
+            msgBox.textContent = msg;
+            msgBox.className = `p-3 rounded-lg text-center font-semibold mt-4 ${type === 'error' ? 'bg-red-100 text-red-700' : type === 'success' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`;
+            msgBox.style.display = 'block';
+            setTimeout(() => {
+                msgBox.style.display = 'none';
+            }, 3000);
+        }
+
         // Function to update recipe access based on membership status
-        function updateRecipeAccess() {
+        // Made globally accessible by attaching to window
+        window.updateRecipeAccess = function() {
             const recipeLinks = document.querySelectorAll('.post-thumbnail, .highlight-circle');
             recipeLinks.forEach(link => {
                 const recipeId = link.dataset.recipe;
@@ -348,7 +138,7 @@
                     link.classList.add('opacity-50', 'cursor-not-allowed');
                     link.onclick = (e) => {
                         e.preventDefault();
-                        showMessage("Upgrade to Premium to unlock this recipe!", "error");
+                        window.showMessage("Upgrade to Premium to unlock this recipe!", "error");
                     };
                 } else {
                     link.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -359,12 +149,12 @@
                         link.addEventListener('click', () => {
                             const recipeId = link.dataset.recipe;
                             if (recipeId) {
-                                activeRecipeId = recipeId;
+                                window.activeRecipeId = recipeId; // Use window.activeRecipeId
                                 document.querySelectorAll('.recipe-view > div').forEach(div => div.classList.add('hidden'));
-                                document.getElementById(`${activeRecipeId}-recipe`).classList.remove('hidden');
+                                document.getElementById(`${window.activeRecipeId}-recipe`).classList.remove('hidden');
                                 document.getElementById('recipe-container').classList.add('active');
                                 document.getElementById('profile-view').classList.remove('active');
-                                updateRecipeView(activeRecipeId);
+                                window.updateRecipeView(window.activeRecipeId); // Use window.updateRecipeView
                             }
                         });
                         link.dataset.hasClickListener = 'true'; // Mark that a listener has been added
@@ -373,11 +163,241 @@
             });
         }
 
-        // Attach event listeners for membership buttons after DOM is loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('activateMembershipBtn').addEventListener('click', handleActivateMembership);
-            document.getElementById('confirmMembershipBtn').addEventListener('click', handleConfirmMembership);
+        // Declare activeRecipeId in a higher scope to be accessible by updateRecipeView
+        let activeRecipeId = null; 
+
+        // Function to update the view of a specific recipe
+        // Made globally accessible by attaching to window
+        window.updateRecipeView = function(recipeId) {
+            const recipe = window.recipeData[recipeId]; // Access from global window.recipeData
+            const stepsContainer = document.getElementById(recipe.stepsContainerId);
+            const stepPanels = stepsContainer.querySelectorAll('.step-panel');
+            const prevBtn = stepsContainer.closest('.bg-amber-100').querySelector('.prev-btn');
+            const nextBtn = stepsContainer.closest('.bg-amber-100').querySelector('.next-btn');
+            const stepIndicator = stepsContainer.closest('.bg-amber-100').querySelector('.step-indicator');
+
+            stepPanels.forEach(panel => {
+                panel.classList.remove('active');
+                const video = panel.querySelector('video');
+                if (video) {
+                    video.pause();
+                    video.currentTime = 0;
+                }
+            });
+
+            const activePanel = stepsContainer.querySelector(`#${recipeId}-step-${recipe.currentStep}`);
+            if (activePanel) {
+                activePanel.classList.add('active');
+                const activeVideo = activePanel.querySelector('video');
+                if (activeVideo) {
+                    activeVideo.play();
+                }
+            }
+            
+            stepIndicator.textContent = `Step ${recipe.currentStep} of ${recipe.totalSteps}`;
+
+            prevBtn.disabled = (recipe.currentStep === 1);
+            nextBtn.textContent = (recipe.currentStep === recipe.totalSteps) ? 'Finish!' : 'Next';
+        }
+
+        // Listen for auth state changes
+        onAuthStateChanged(auth, async (user) => {
+            const userIdDisplay = document.getElementById('userIdDisplay');
+            const membershipStatusDisplay = document.getElementById('membershipStatusDisplay');
+            const authButtons = document.getElementById('authButtons');
+            const activateMembershipBtn = document.getElementById('activateMembershipBtn');
+            const confirmMembershipBtn = document.getElementById('confirmMembershipBtn');
+            const emailInput = document.getElementById('emailInput');
+            const passwordInput = document.getElementById('passwordInput');
+            const loginSignupMessage = document.getElementById('loginSignupMessage');
+
+            // Attempt to sign in with custom token first if available
+            if (typeof __initial_auth_token !== 'undefined' && !user) {
+                try {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                    // User will be set by the onAuthStateChanged listener after this
+                } catch (error) {
+                    console.error("Error signing in with custom token:", error);
+                    window.showMessage("Failed to sign in automatically. Please try again or use email/password.", "error");
+                    // No anonymous fallback as requested
+                }
+            } else if (typeof __initial_auth_token === 'undefined' && !user) {
+                // If no custom token, sign in anonymously
+                try {
+                    await signInAnonymously(auth);
+                    // User will be set by the onAuthStateChanged listener after this
+                } catch (error) {
+                    console.error("Error signing in anonymously:", error);
+                    window.showMessage("Failed to sign in anonymously. Please try again.", "error");
+                }
+            }
+
+            if (user) {
+                window.currentUserId = user.uid;
+                userIdDisplay.textContent = `Logged in as: ${user.isAnonymous ? 'Anonymous' : user.email || user.uid}`; // Show UID for anonymous
+                authButtons.innerHTML = `<button id="signOutBtn" class="btn bg-red-500 hover:bg-red-600">Sign Out</button>`;
+                document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
+
+                // Display full userId for multi-user apps (as per instructions)
+                const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
+                if (existingFullUserIdDisplay) {
+                    existingFullUserIdDisplay.textContent = `User ID: ${user.uid}`;
+                } else {
+                    const fullUserIdDisplay = document.createElement('p');
+                    fullUserIdDisplay.className = "text-sm text-gray-500 mt-1 full-user-id-display";
+                    fullUserIdDisplay.textContent = `User ID: ${user.uid}`;
+                    userIdDisplay.parentNode.insertBefore(fullUserIdDisplay, userIdDisplay.nextSibling);
+                }
+
+
+                // Check membership status in Firestore
+                // Ensure db is initialized before trying to access it
+                if (db) {
+                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
+                    onSnapshot(userProfileRef, (docSnap) => {
+                        if (docSnap.exists() && docSnap.data().status === 'premium') {
+                            window.isPremiumMember = true;
+                            membershipStatusDisplay.textContent = 'Status: Premium Member ✨';
+                            activateMembershipBtn.style.display = 'none';
+                            confirmMembershipBtn.style.display = 'none';
+                            loginSignupMessage.textContent = ''; // Clear message
+                        } else {
+                            window.isPremiumMember = false;
+                            membershipStatusDisplay.textContent = 'Status: Free User';
+                            activateMembershipBtn.style.display = 'inline-block';
+                            confirmMembershipBtn.style.display = 'none'; // Hide confirm until payment link is visited
+                            loginSignupMessage.textContent = 'Upgrade to unlock all recipes!';
+                        }
+                        window.updateRecipeAccess(); // Update UI based on membership
+                    }, (error) => {
+                        console.error("Error listening to membership status:", error);
+                        window.isPremiumMember = false;
+                        membershipStatusDisplay.textContent = 'Status: Free User (Error loading status)';
+                        window.updateRecipeAccess();
+                    });
+                } else {
+                    console.warn("Firestore not initialized, cannot check membership status.");
+                    membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
+                    window.updateRecipeAccess();
+                }
+
+            } else {
+                window.currentUserId = null;
+                window.isPremiumMember = false;
+                userIdDisplay.textContent = 'Not logged in.';
+                membershipStatusDisplay.textContent = 'Status: Free User';
+                authButtons.innerHTML = `
+                    <input type="email" id="emailInput" placeholder="Email" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
+                    <input type="password" id="passwordInput" placeholder="Password" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
+                    <button id="signUpBtn" class="btn bg-blue-500 hover:bg-blue-600">Sign Up</button>
+                    <button id="loginBtn" class="btn bg-green-500 hover:bg-green-600">Log In</button>
+                `;
+                document.getElementById('signUpBtn').addEventListener('click', handleSignUp);
+                document.getElementById('loginBtn').addEventListener('click', handleLogin);
+                activateMembershipBtn.style.display = 'none'; // Only show after anonymous login
+                confirmMembershipBtn.style.display = 'none';
+                loginSignupMessage.textContent = 'Sign in or sign up to save your progress and access premium features.';
+
+                const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
+                if (existingFullUserIdDisplay) {
+                    existingFullUserIdDisplay.remove(); // Remove if user logs out
+                }
+            }
         });
+
+        async function handleSignUp() {
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            if (!email || !password) {
+                window.showMessage("Please enter email and password.", "error");
+                return;
+            }
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                // Create a basic profile in Firestore for the new user
+                if (db) {
+                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
+                    await setDoc(userProfileRef, { status: 'free', createdAt: new Date() });
+                    window.showMessage("Signed up and logged in successfully!", "success");
+                } else {
+                    window.showMessage("Signed up, but Firestore is not available to save profile.", "info");
+                }
+            } catch (error) {
+                console.error("Error signing up:", error);
+                window.showMessage(`Sign Up Failed: ${error.message}`, "error");
+            }
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            if (!email || !password) {
+                window.showMessage("Please enter email and password.", "error");
+                return;
+            }
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                window.showMessage("Logged in successfully!", "success");
+            } catch (error) {
+                console.error("Error logging in:", error);
+                window.showMessage(`Login Failed: ${error.message}`, "error");
+            }
+        }
+
+        async function handleSignOut() {
+            try {
+                await signOut(auth);
+                window.showMessage("Signed out successfully!", "info");
+                // No anonymous sign-in after sign out as requested
+            } catch (error) {
+                console.error("Error signing out:", error);
+                window.showMessage(`Sign Out Failed: ${error.message}`, "error");
+            }
+        }
+
+        async function handleActivateMembership() {
+            if (!window.currentUserId) {
+                window.showMessage("Please sign in or sign up first!", "error");
+                return;
+            }
+            if (window.isPremiumMember) {
+                window.showMessage("You are already a premium member!", "info");
+                return;
+            }
+
+            // Redirect to Stripe payment link
+            window.open(window.stripePaymentLink, '_blank');
+
+            // Show "Confirm Membership" button after redirection
+            document.getElementById('confirmMembershipBtn').style.display = 'inline-block';
+            window.showMessage("Please complete your purchase on Stripe. Then click 'Confirm Membership Activation' here.", "info");
+        }
+
+        async function handleConfirmMembership() {
+            if (!window.currentUserId) {
+                window.showMessage("You must be signed in to confirm membership.", "error");
+                return;
+            }
+            if (window.isPremiumMember) {
+                window.showMessage("You are already a premium member!", "info");
+                return;
+            }
+
+            try {
+                if (db) {
+                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${window.currentUserId}/profile/membership`);
+                    await setDoc(userProfileRef, { status: 'premium', activatedAt: new Date() }, { merge: true });
+                    window.showMessage("Membership activated! Welcome, Premium Chef!", "success");
+                    document.getElementById('confirmMembershipBtn').style.display = 'none'; // Hide button after activation
+                } else {
+                    window.showMessage("Firestore is not available to confirm membership.", "error");
+                }
+            } catch (error) {
+                console.error("Error confirming membership:", error);
+                window.showMessage(`Failed to activate membership: ${error.message}`, "error");
+            }
+        }
 
     </script>
     <!-- Chosen Palette: Warm & Cozy Neutrals with Playful Accents -->
@@ -586,14 +606,6 @@
                         <div class="highlight-circle" data-recipe="apple-pie">🍎</div>
                         <span class="text-sm text-stone-600 mt-2">Apple Pie</span>
                     </div>
-                    <div class="flex flex-col items-center">
-                        <div class="highlight-circle" data-recipe="peanut-butter-bites">🥜</div>
-                        <span class="text-sm text-stone-600 mt-2">PB Bites</span>
-                    </div>
-                    <div class="flex flex-col items-center">
-                        <div class="highlight-circle" data-recipe="veggie-delight-skewers">🍡</div>
-                        <span class="text-sm text-stone-600 mt-2">Veggie Skewers</span>
-                    </div>
                 </div>
             </section>
 
@@ -626,7 +638,7 @@
                         <div class="post-title-overlay">Pancakes</div>
                     </div>
                     <div class="post-thumbnail" data-recipe="brownies">
-                        <img src="https://placehold.co/600x600/FBD38D/7B341E?text=Brownies" alt="Pip's Brownies Post">
+                        <img src="https://i.imgur.com/ylH6PCa.mp4" alt="Pip's Brownies Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Brownies';">
                         <div class="post-title-overlay">Brownies</div>
                     </div>
 
@@ -636,24 +648,12 @@
                         <div class="post-title-overlay">Delightful Carrot Cake!</div>
                     </div>
                     <div class="post-thumbnail page-2-recipe hidden" data-recipe="sunflower-seed-bread">
-                        <img src="https://i.imgur.com/4QV9P4h.jpeg" alt="Pip's Sunflower Seed Bread Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Sunflower+Seed+Bread';">
+                        <img src="https://i.imgur.com/YEwYYPv.jpeg" alt="Pip's Sunflower Seed Bread Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Sunflower+Seed+Bread';">
                         <div class="post-title-overlay">Hearty Sunflower Seed Bread!</div>
                     </div>
                     <div class="post-thumbnail page-2-recipe hidden" data-recipe="apple-pie">
                         <img src="https://i.imgur.com/LQYetF5.jpeg" alt="Pip's Apple Pie Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Apple+Pie';">
                         <div class="post-title-overlay">Sweet Apple Pie!</div>
-                    </div>
-                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="peanut-butter-bites">
-                        <img src="https://i.imgur.com/5I4alu7.jpeg" alt="Pip's Peanut Butter Bites Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Peanut+Butter+Bites';">
-                        <div class="post-title-overlay">Nutty Peanut Butter Bites!</div>
-                    </div>
-                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="veggie-delight-skewers">
-                        <!-- Video thumbnail for Veggie Delight Skewers -->
-                        <video autoplay loop muted playsinline poster="https://i.imgur.com/A39urWa.jpeg" class="absolute top-0 left-0 w-full h-full object-cover rounded-xl">
-                            <source src="https://i.imgur.com/5OkFaxs.mp4" type="video/mp4">
-                            Your browser does not not support the video tag.
-                        </video>
-                        <div class="post-title-overlay">Colorful Veggie Skewers!</div>
                     </div>
                 </div>
                 <div class="text-center mt-6">
@@ -825,7 +825,8 @@
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: The Legendary Flip!</h3>
                                 <p class="text-stone-700">This is where the magic happens! Pip, with surprising agility, demonstrates his incredible pancake-flipping skills. Watch him go – a perfect flip every time! It's truly a sight to behold.</p>
                                 <div class="video-container mx-auto max-w-xl">
-                                    <source src="https://i.imgur.com/ozP8slo.mp4" type="video/mp4">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/ozP8slo.mp4" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                 </div>
@@ -856,7 +857,7 @@
                 <section class="mt-10">
                     <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
                         <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
-                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human sugar, chocolate, or processed foods!</strong> These are very dangerous for them. Pip's "pancakes" were made entirely of hamster-safe ingredients. Always research what foods are safe for your pet!</p>
+                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human sugar, chocolate, or processed foods!</strong> These are very dangerous for them. Pip's "pancakes" were made entirely of hamster-safe ingredients like pellets, mashed banana, and a tiny blueberry. Always research what foods are safe for your pet!</p>
                     </div>
                 </section>
             </div>
@@ -1077,17 +1078,14 @@
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: The "Bun" Base!</h3>
                                 <p class="text-stone-700">Pip starts by preparing his "bun" halves. These are carefully crafted from compressed, finely ground hamster pellets, shaped into perfect little circles. He's making sure they're just the right size for his tiny paws!</p>
                                 <div class="image-container mx-auto max-w-xl">
-                                    <img src="https://i.imgur.com/RCl3c2J.jpeg" alt="Pip preparing hamburger bun" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                    <img src="https://i.imgur.com/TDtkyw8.jpeg" alt="Pip preparing hamburger bun" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
                                 </div>
                             </div>
                             <div id="hamburger-step-2" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: The "Patty" Perfection!</h3>
                                 <p class="text-stone-700">Next, it's time for the star of the show: the "patty"! Pip is meticulously forming a disc from a mixture of finely ground hamster pellets and a tiny bit of safe, plain vegetable puree (like pea or carrot). He's pressing it just right for that perfect burger shape.</p>
-                                <div class="video-container mx-auto max-w-xl">
-                                    <video controls autoplay loop muted playsinline>
-                                        <source src="https://i.imgur.com/KNSRyaj.mp4" type="video/mp4">
-                                        Your browser does not support the video tag.
-                                    </video>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://i.imgur.com/s6m1o3m.jpeg" alt="Pip making hamburger patty" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
                                 </div>
                             </div>
                             <div id="hamburger-step-3" class="step-panel">
@@ -1100,7 +1098,7 @@
                                 <p class="text-stone-700">With all the components ready, Pip carefully places the "patty" and "toppings" onto one "bun" half, then crowns it with the other. He's making sure his masterpiece is perfectly aligned and ready for its grand reveal!</p>
                                 <div class="video-container mx-auto max-w-xl">
                                     <video controls autoplay loop muted playsinline>
-                                        <source src="https://i.imgur.com/VnS0vJ9.mp4" type="video/mp4">
+                                        <source src="https://i.imgur.com/rWv186u.mp4" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                 </div>
@@ -1210,26 +1208,22 @@
                             <div id="sunflower-seed-bread-step-1" class="step-panel active">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: Crushing the Seeds!</h3>
                                 <p class="text-stone-700">Pip begins by carefully crushing tiny, unsalted sunflower seeds. He knows these are the key to his bread's hearty flavor!</p>
-                                <div class="image-container mx-auto max-w-xl">
-                                    <img src="https://i.imgur.com/4QV9P4h.jpeg" alt="Pip crushing sunflower seeds" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
-                                </div>
+                                <div class="text-5xl text-center mt-6">🔨</div>
                             </div>
                             <div id="sunflower-seed-bread-step-2" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Mixing the Dough!</h3>
                                 <p class="text-stone-700">The crushed seeds are mixed with finely ground hamster pellets and a touch of water to form a stiff dough. Pip is kneading with all his might!</p>
-                                <div class="image-container mx-auto max-w-xl">
-                                    <img src="https://i.imgur.com/DwV3FVJ.jpeg" alt="Pip mixing sunflower seed bread dough" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/r8ESVks.mp4" type="video/mp4"> <!-- Reusing shaping video for demonstration -->
+                                        Your browser does not support the video tag.
+                                    </video>
                                 </div>
                             </div>
                             <div id="sunflower-seed-bread-step-3" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: Shaping the Loaf!</h3>
                                 <p class="text-stone-700">Pip meticulously shapes the dough into a miniature bread loaf. It's going to be a perfect, tiny masterpiece!</p>
-                                <div class="video-container mx-auto max-w-xl">
-                                    <video controls autoplay loop muted playsinline>
-                                        <source src="https://i.imgur.com/WFOs9WM.mp4" type="video/mp4">
-                                        Your browser does not support the video tag.
-                                    </video>
-                                </div>
+                                <div class="text-5xl text-center mt-6">🍞</div>
                             </div>
                             <div id="sunflower-seed-bread-step-4" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: "Baking" to Perfection!</h3>
@@ -1325,122 +1319,6 @@
                 </section>
             </div>
 
-            <!-- New Recipe: Peanut Butter Bites -->
-            <div id="peanut-butter-bites-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
-                <section id="intro-peanut-butter-bites">
-                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
-                        <span class="text-4xl mr-3">🥜</span> Pip's Nutty Peanut Butter Bites! <span class="text-4xl ml-3">🌰</span>
-                    </h2>
-                    <p class="text-stone-600 text-center leading-relaxed">
-                        Get ready for a protein-packed treat! Pip is making his favorite "Peanut Butter Bites" – a special, safe version for hamsters, of course! These are perfect for a quick energy boost.
-                    </p>
-                </section>
-                <section class="mt-10">
-                    <div class="bg-amber-100 rounded-lg p-6">
-                        <div id="steps-container-peanut-butter-bites" class="relative min-h-[400px]">
-                            <div id="peanut-butter-bites-step-1" class="step-panel active">
-                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: The Nutty Base!</h3>
-                                <p class="text-stone-700">Pip starts with a tiny dab of unsweetened, unsalted, hamster-safe peanut butter (check ingredients carefully!). He mixes it with finely ground oats for texture.</p>
-                                <div class="image-container mx-auto max-w-xl">
-                                    <img src="https://i.imgur.com/5I4alu7.jpeg" alt="Pip preparing peanut butter base" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
-                                </div>
-                            </div>
-                            <div id="peanut-butter-bites-step-2" class="step-panel">
-                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Rolling the Bites!</h3>
-                                <p class="text-stone-700">With his tiny paws, Pip meticulously rolls the mixture into small, bite-sized balls. He's making sure each one is perfectly round!</p>
-                                <div class="image-container mx-auto max-w-xl">
-                                    <img src="https://i.imgur.com/OLVQ9j7.jpeg" alt="Pip rolling peanut butter bites" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
-                                </div>
-                            </div>
-                            <div id="peanut-butter-bites-step-3" class="step-panel">
-                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: Chilling for Firmness!</h3>
-                                <p class="text-stone-700">The little bites need to chill to firm up. Pip patiently waits, knowing good things come to those who wait!</p>
-                                <div class="video-container mx-auto max-w-xl">
-                                    <video controls autoplay loop muted playsinline>
-                                        <source src="https://i.imgur.com/KNSRyaj.mp4" type="video/mp4">
-                                        Your browser does not support the video tag.
-                                    </video>
-                                </div>
-                            </div>
-                            <div id="peanut-butter-bites-step-4" class="step-panel">
-                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: The Protein Power-Up!</h3>
-                                <p class="text-stone-700">Ready for a treat! Pip enjoys his nutty peanut butter bites. They're a delicious and safe snack for a busy hamster chef.</p>
-                                <div class="video-container mx-auto max-w-xl">
-                                    <video controls autoplay loop muted playsinline>
-                                        <source src="https://i.imgur.com/VnS0vJ9.mp4" type="video/mp4">
-                                        Your browser does not support the video tag.
-                                    </video>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
-                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 4</div>
-                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
-                        </div>
-                    </div>
-                </section>
-                <section class="mt-10">
-                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
-                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
-                        <p class="mt-2">Remember, while this was a fun, imaginary cooking adventure, <strong>hamsters should NEVER eat human peanut butter with sugar, salt, or xylitol!</strong> Only tiny amounts of unsweetened, unsalted, xylitol-free peanut butter are safe as a very rare treat. Always research what foods are safe and appropriate for your pet!</p>
-                    </div>
-                </section>
-            </div>
-
-            <!-- New Recipe: Veggie Delight Skewers -->
-            <div id="veggie-delight-skewers-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
-                <section id="intro-veggie-delight-skewers">
-                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
-                        <span class="text-4xl mr-3">🍡</span> Pip's Colorful Veggie Delight Skewers! <span class="text-4xl ml-3">🥕</span>
-                    </h2>
-                    <p class="text-stone-600 text-center leading-relaxed">
-                        Get ready for a burst of freshness! Pip is assembling his vibrant "Veggie Delight Skewers" – a healthy and fun treat packed with his favorite safe vegetables.
-                    </p>
-                </section>
-                <section class="mt-10">
-                    <div class="bg-amber-100 rounded-lg p-6">
-                        <div id="steps-container-veggie-delight-skewers" class="relative min-h-[400px]">
-                            <div id="veggie-delight-skewers-step-1" class="step-panel active">
-                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: Prepping the Veggies!</h3>
-                                <p class="text-stone-700">Pip carefully selects and prepares tiny pieces of hamster-safe vegetables like carrot, cucumber, and bell pepper. He's making sure each piece is perfectly sized for his skewers!</p>
-                                <div class="image-container mx-auto max-w-xl">
-                                    <img src="https://i.imgur.com/A39urWa.jpeg" alt="Pip prepping veggies for skewers" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
-                                </div>
-                            </div>
-                            <div id="veggie-delight-skewers-step-2" class="step-panel">
-                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Assembling the Skewers!</h3>
-                                <p class="text-stone-700">Using tiny, blunt wooden sticks (or even a sturdy piece of hay!), Pip meticulously threads the colorful veggie pieces onto his skewers. It's a work of art!</p>
-                                <div class="image-container mx-auto max-w-xl">
-                                    <img src="https://i.imgur.com/lk40FsC.jpeg" alt="Pip assembling veggie skewers" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
-                                </div>
-                            </div>
-                            <div id="veggie-delight-skewers-step-3" class="step-panel">
-                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: The Fresh Feast!</h3>
-                                <p class="text-stone-700">Voila! Pip proudly presents and enjoys his fresh veggie skewers. A healthy and delightful snack for any discerning hamster!</p>
-                                <div class="video-container mx-auto max-w-xl">
-                                    <video controls autoplay loop muted playsinline>
-                                        <source src="https://i.imgur.com/5OkFaxs.mp4" type="video/mp4">
-                                        Your browser does not support the video tag.
-                                    </video>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
-                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 3</div>
-                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
-                        </div>
-                    </div>
-                </section>
-                <section class="mt-10">
-                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
-                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
-                        <p class="mt-2">Remember, while this was a fun, imaginary cooking adventure, <strong>always ensure all vegetables are safe for hamsters and given in moderation!</strong> Avoid onions, garlic, citrus, and any moldy or spoiled produce. Only use blunt, safe skewers if providing them to your pet. Always research what foods are safe and appropriate for your pet!</p>
-                    </div>
-                </section>
-            </div>
-
         </div>
 
     </div>
@@ -1455,45 +1333,15 @@
             const page2Recipes = document.querySelectorAll('.page-2-recipe');
 
             // recipeData is now globally available via window.recipeData
-            let activeRecipeId = null;
-
+            // activeRecipeId is now globally available
+            // showMessage is now globally available via window.showMessage
+            // updateRecipeView is now globally available via window.updateRecipeView
+            
             function showView(viewId) {
                 profileView.classList.remove('active');
                 recipeContainer.classList.remove('active');
                 
                 document.getElementById(viewId).classList.add('active');
-            }
-
-            function updateRecipeView(recipeId) {
-                const recipe = window.recipeData[recipeId]; // Access from global window.recipeData
-                const stepsContainer = document.getElementById(recipe.stepsContainerId);
-                const stepPanels = stepsContainer.querySelectorAll('.step-panel');
-                const prevBtn = stepsContainer.closest('.bg-amber-100').querySelector('.prev-btn');
-                const nextBtn = stepsContainer.closest('.bg-amber-100').querySelector('.next-btn');
-                const stepIndicator = stepsContainer.closest('.bg-amber-100').querySelector('.step-indicator');
-
-                stepPanels.forEach(panel => {
-                    panel.classList.remove('active');
-                    const video = panel.querySelector('video');
-                    if (video) {
-                        video.pause();
-                        video.currentTime = 0;
-                    }
-                });
-
-                const activePanel = stepsContainer.querySelector(`#${recipeId}-step-${recipe.currentStep}`);
-                if (activePanel) {
-                    activePanel.classList.add('active');
-                    const activeVideo = activePanel.querySelector('video');
-                    if (activeVideo) {
-                        activeVideo.play();
-                    }
-                }
-                
-                stepIndicator.textContent = `Step ${recipe.currentStep} of ${recipe.totalSteps}`;
-
-                prevBtn.disabled = (recipe.currentStep === 1);
-                nextBtn.textContent = (recipe.currentStep === recipe.totalSteps) ? 'Finish!' : 'Next';
             }
 
             function handleRecipeNavigation(event) {
@@ -1507,7 +1355,7 @@
                 if (button.classList.contains('next-btn')) {
                     if (recipe.currentStep < recipe.totalSteps) {
                         recipe.currentStep++;
-                        updateRecipeView(recipeId);
+                        window.updateRecipeView(recipeId); // Use window.updateRecipeView
                     } else {
                         const modal = document.createElement('div');
                         modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4';
@@ -1526,7 +1374,7 @@
                 } else if (button.classList.contains('prev-btn')) {
                     if (recipe.currentStep > 1) {
                         recipe.currentStep--;
-                        updateRecipeView(recipeId);
+                        window.updateRecipeView(recipeId); // Use window.updateRecipeView
                     }
                 }
             }
@@ -1536,15 +1384,15 @@
                 circle.addEventListener('click', () => {
                     const recipeId = circle.dataset.recipe;
                     if (window.recipeData[recipeId].isPremium && !window.isPremiumMember) {
-                        showMessage("Upgrade to Premium to unlock this recipe!", "error");
+                        window.showMessage("Upgrade to Premium to unlock this recipe!", "error");
                         return;
                     }
-                    activeRecipeId = recipeId;
+                    activeRecipeId = recipeId; // Assign to the global activeRecipeId
                     document.querySelectorAll('.recipe-view > div').forEach(div => div.classList.add('hidden'));
                     document.getElementById(`${activeRecipeId}-recipe`).classList.remove('hidden');
                     recipeContainer.classList.add('active');
                     profileView.classList.remove('active');
-                    updateRecipeView(activeRecipeId);
+                    window.updateRecipeView(activeRecipeId); // Use window.updateRecipeView
                 });
             });
 
@@ -1554,15 +1402,15 @@
                     const recipeId = thumbnail.dataset.recipe;
                     if (recipeId) { // Only navigate if data-recipe attribute exists
                         if (window.recipeData[recipeId].isPremium && !window.isPremiumMember) {
-                            showMessage("Upgrade to Premium to unlock this recipe!", "error");
+                            window.showMessage("Upgrade to Premium to unlock this recipe!", "error");
                             return;
                         }
-                        activeRecipeId = recipeId;
+                        activeRecipeId = recipeId; // Assign to the global activeRecipeId
                         document.querySelectorAll('.recipe-view > div').forEach(div => div.classList.add('hidden'));
                         document.getElementById(`${activeRecipeId}-recipe`).classList.remove('hidden');
                         recipeContainer.classList.add('active');
                         profileView.classList.remove('active');
-                        updateRecipeView(activeRecipeId);
+                        window.updateRecipeView(activeRecipeId); // Use window.updateRecipeView
                     }
                 });
             });
@@ -1582,7 +1430,7 @@
                 if (activeRecipeId) {
                     window.recipeData[activeRecipeId].currentStep = 1; // Access from global window.recipeData
                 }
-                activeRecipeId = null;
+                activeRecipeId = null; // Reset global activeRecipeId
             });
 
             // Load More Recipes button functionality
@@ -1590,7 +1438,7 @@
                 page2Recipes.forEach(recipe => recipe.classList.remove('hidden'));
                 loadMoreBtn.classList.add('hidden');
                 hideRecipesBtn.classList.remove('hidden');
-                updateRecipeAccess(); // Re-apply access rules after showing new recipes
+                window.updateRecipeAccess(); // Re-apply access rules after showing new recipes
             });
 
             // Hide Recipes button functionality
@@ -1598,12 +1446,12 @@
                 page2Recipes.forEach(recipe => recipe.classList.add('hidden'));
                 hideRecipesBtn.classList.add('hidden');
                 loadMoreBtn.classList.remove('hidden');
-                updateRecipeAccess(); // Re-apply access rules after hiding recipes
+                window.updateRecipeAccess(); // Re-apply access rules after hiding recipes
             });
 
             // Initial view setup
             showView('profile-view');
-            updateRecipeAccess(); // Initial update of recipe access
+            window.updateRecipeAccess(); // Initial update of recipe access
         });
     </script>
 
