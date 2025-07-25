@@ -20,20 +20,32 @@
         // Initialize Firebase app only if config is available
         let app, auth, db;
         if (Object.keys(firebaseConfig).length > 0) {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                window.firebaseApp = app;
+                window.firebaseAuth = auth;
+                window.firebaseDb = db;
+                window.appId = appId;
+            } catch (e) {
+                console.error("Firebase initialization failed:", e);
+                window.showMessage("Failed to initialize app services. Please try again later.", "error");
+                // Ensure auth and db remain null/undefined if init fails
+                app = null;
+                auth = null;
+                db = null;
+            }
         } else {
             console.error("Firebase configuration not found. Please ensure __firebase_config is set.");
-            // Fallback for development outside Canvas if needed, but not for production in Canvas
+            window.showMessage("App configuration missing. Cannot connect to services.", "error");
+            app = null;
+            auth = null;
+            db = null;
         }
 
-        window.firebaseApp = app;
-        window.firebaseAuth = auth;
-        window.firebaseDb = db;
         window.currentUserId = null;
         window.isPremiumMember = false;
-        window.appId = appId; // Assign the determined appId to window
 
         // Stripe Payment Link ID from user query
         window.stripePaymentLink = "https://buy.stripe.com/bJe3cwagjgPH9o98G34gg00"; // Updated payment link
@@ -109,6 +121,27 @@
                 containerId: 'apple-pie-recipe',
                 stepsContainerId: 'steps-container-apple-pie',
                 isPremium: false // Apple Pie is now FREE
+            },
+            'berry-smoothie': { // New Recipe
+                totalSteps: 4,
+                currentStep: 1,
+                containerId: 'berry-smoothie-recipe',
+                stepsContainerId: 'steps-container-berry-smoothie',
+                isPremium: true // Premium
+            },
+            'veggie-skewers': { // New Recipe
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'veggie-skewers-recipe',
+                stepsContainerId: 'steps-container-veggie-skewers',
+                isPremium: true // Premium
+            },
+            'seed-mix-cookies': { // New Recipe
+                totalSteps: 5,
+                currentStep: 1,
+                containerId: 'seed-mix-cookies-recipe',
+                stepsContainerId: 'steps-container-seed-mix-cookies',
+                isPremium: true // Premium
             }
         };
         window.recipeData = recipeData; // Make recipeData globally accessible for updateRecipeAccess
@@ -200,112 +233,167 @@
             nextBtn.textContent = (recipe.currentStep === recipe.totalSteps) ? 'Finish!' : 'Next';
         }
 
-        // Listen for auth state changes
-        onAuthStateChanged(auth, async (user) => {
-            const userIdDisplay = document.getElementById('userIdDisplay');
-            const membershipStatusDisplay = document.getElementById('membershipStatusDisplay');
-            const authButtons = document.getElementById('authButtons');
-            const activateMembershipBtn = document.getElementById('activateMembershipBtn');
-            const confirmMembershipBtn = document.getElementById('confirmMembershipBtn');
-            const emailInput = document.getElementById('emailInput');
-            const passwordInput = document.getElementById('passwordInput');
-            const loginSignupMessage = document.getElementById('loginSignupMessage');
+        // Only proceed with auth listener if auth is successfully initialized
+        if (auth) {
+            onAuthStateChanged(auth, async (user) => {
+                const userIdDisplay = document.getElementById('userIdDisplay');
+                const membershipStatusDisplay = document.getElementById('membershipStatusDisplay');
+                const authButtons = document.getElementById('authButtons');
+                const activateMembershipBtn = document.getElementById('activateMembershipBtn');
+                const confirmMembershipBtn = document.getElementById('confirmMembershipBtn');
+                const loginSignupMessage = document.getElementById('loginSignupMessage');
+                const viewMyProfileBtn = document.getElementById('viewMyProfileBtn');
+                const myUserProfileView = document.getElementById('my-user-profile-view');
 
-            // Attempt to sign in with custom token first if available
-            if (typeof __initial_auth_token !== 'undefined' && !user) {
-                try {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                    // User will be set by the onAuthStateChanged listener after this
-                } catch (error) {
-                    console.error("Error signing in with custom token:", error);
-                    window.showMessage("Failed to sign in automatically. Please try again or use email/password.", "error");
-                    // No anonymous fallback as requested
-                }
-            } else if (typeof __initial_auth_token === 'undefined' && !user) {
-                // If no custom token, sign in anonymously
-                try {
-                    await signInAnonymously(auth);
-                    // User will be set by the onAuthStateChanged listener after this
-                } catch (error) {
-                    console.error("Error signing in anonymously:", error);
-                    window.showMessage("Failed to sign in anonymously. Please try again.", "error");
-                }
-            }
+                console.log("Auth state changed. User:", user);
 
-            if (user) {
-                window.currentUserId = user.uid;
-                userIdDisplay.textContent = `Logged in as: ${user.isAnonymous ? 'Anonymous' : user.email || user.uid}`; // Show UID for anonymous
-                authButtons.innerHTML = `<button id="signOutBtn" class="btn bg-red-500 hover:bg-red-600">Sign Out</button>`;
-                document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
-
-                // Display full userId for multi-user apps (as per instructions)
-                const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
-                if (existingFullUserIdDisplay) {
-                    existingFullUserIdDisplay.textContent = `User ID: ${user.uid}`;
-                } else {
-                    const fullUserIdDisplay = document.createElement('p');
-                    fullUserIdDisplay.className = "text-sm text-gray-500 mt-1 full-user-id-display";
-                    fullUserIdDisplay.textContent = `User ID: ${user.uid}`;
-                    userIdDisplay.parentNode.insertBefore(fullUserIdDisplay, userIdDisplay.nextSibling);
+                // Attempt to sign in with custom token first if available
+                if (typeof __initial_auth_token !== 'undefined' && !user) {
+                    try {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                        // User will be set by the onAuthStateChanged listener after this
+                    } catch (error) {
+                        console.error("Error signing in with custom token:", error);
+                        window.showMessage("Failed to sign in automatically. Please try again or use email/password.", "error");
+                    }
+                } else if (typeof __initial_auth_token === 'undefined' && !user) {
+                    // If no custom token, sign in anonymously
+                    try {
+                        await signInAnonymously(auth);
+                        // User will be set by the onAuthStateChanged listener after this
+                    } catch (error) {
+                        console.error("Error signing in anonymously:", error);
+                        window.showMessage("Failed to sign in anonymously. Please try again.", "error");
+                    }
                 }
 
+                if (user) {
+                    window.currentUserId = user.uid;
+                    userIdDisplay.textContent = `Logged in as: ${user.isAnonymous ? 'Anonymous' : user.email || user.uid}`; // Show UID for anonymous
+                    authButtons.innerHTML = `<button id="signOutBtn" class="btn bg-red-500 hover:bg-red-600">Sign Out</button>`;
+                    document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
+                    viewMyProfileBtn.style.display = 'inline-block'; // Show "My Profile" button
 
-                // Check membership status in Firestore
-                // Ensure db is initialized before trying to access it
-                if (db) {
-                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
-                    onSnapshot(userProfileRef, (docSnap) => {
-                        if (docSnap.exists() && docSnap.data().status === 'premium') {
-                            window.isPremiumMember = true;
-                            membershipStatusDisplay.textContent = 'Status: Premium Member ✨';
-                            activateMembershipBtn.style.display = 'none';
-                            confirmMembershipBtn.style.display = 'none';
-                            loginSignupMessage.textContent = ''; // Clear message
-                        } else {
+                    // Display full userId for multi-user apps (as per instructions)
+                    const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
+                    if (existingFullUserIdDisplay) {
+                        existingFullUserIdDisplay.textContent = `User ID: ${user.uid}`;
+                    } else {
+                        const fullUserIdDisplay = document.createElement('p');
+                        fullUserIdDisplay.className = "text-sm text-gray-500 mt-1 full-user-id-display";
+                        fullUserIdDisplay.textContent = `User ID: ${user.uid}`;
+                        userIdDisplay.parentNode.insertBefore(fullUserIdDisplay, userIdDisplay.nextSibling);
+                    }
+
+
+                    // Check membership status in Firestore
+                    // Ensure db is initialized before trying to access it
+                    if (db) {
+                        const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
+                        onSnapshot(userProfileRef, (docSnap) => {
+                            if (docSnap.exists() && docSnap.data().status === 'premium') {
+                                window.isPremiumMember = true;
+                                membershipStatusDisplay.textContent = 'Status: Premium Member ✨';
+                                activateMembershipBtn.style.display = 'none';
+                                confirmMembershipBtn.style.display = 'none';
+                                loginSignupMessage.textContent = ''; // Clear message
+                            } else {
+                                window.isPremiumMember = false;
+                                membershipStatusDisplay.textContent = 'Status: Free User';
+                                activateMembershipBtn.style.display = 'inline-block';
+                                confirmMembershipBtn.style.display = 'none'; // Hide confirm until payment link is visited
+                                loginSignupMessage.textContent = 'Upgrade to unlock all recipes!';
+                            }
+                            window.updateRecipeAccess(); // Update UI based on membership
+                            // Update My Profile section
+                            if (myUserProfileView.classList.contains('active')) {
+                                document.getElementById('myProfileUserId').textContent = `User ID: ${user.uid}`;
+                                document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: ${window.isPremiumMember ? 'Premium ✨' : 'Free'}`;
+                            }
+                        }, (error) => {
+                            console.error("Error listening to membership status:", error);
                             window.isPremiumMember = false;
-                            membershipStatusDisplay.textContent = 'Status: Free User';
-                            activateMembershipBtn.style.display = 'inline-block';
-                            confirmMembershipBtn.style.display = 'none'; // Hide confirm until payment link is visited
-                            loginSignupMessage.textContent = 'Upgrade to unlock all recipes!';
-                        }
-                        window.updateRecipeAccess(); // Update UI based on membership
-                    }, (error) => {
-                        console.error("Error listening to membership status:", error);
-                        window.isPremiumMember = false;
-                        membershipStatusDisplay.textContent = 'Status: Free User (Error loading status)';
+                            membershipStatusDisplay.textContent = 'Status: Free User (Error loading status)';
+                            window.updateRecipeAccess();
+                            if (myUserProfileView.classList.contains('active')) {
+                                document.getElementById('myProfileUserId').textContent = `User ID: ${user.uid}`;
+                                document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: Free (Error loading status)`;
+                            }
+                        });
+                    } else {
+                        console.warn("Firestore not initialized, cannot check membership status.");
+                        membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
                         window.updateRecipeAccess();
-                    });
-                } else {
-                    console.warn("Firestore not initialized, cannot check membership status.");
-                    membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
-                    window.updateRecipeAccess();
-                }
+                        if (myUserProfileView.classList.contains('active')) {
+                            document.getElementById('myProfileUserId').textContent = `User ID: ${user.uid}`;
+                            document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: Free (Service Unavailable)`;
+                        }
+                    }
 
-            } else {
+                } else {
+                    window.currentUserId = null;
+                    window.isPremiumMember = false;
+                    userIdDisplay.textContent = 'Not logged in.';
+                    membershipStatusDisplay.textContent = 'Status: Free User';
+                    authButtons.innerHTML = `
+                        <input type="email" id="emailInput" placeholder="Email" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
+                        <input type="password" id="passwordInput" placeholder="Password" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
+                        <button id="signUpBtn" class="btn bg-blue-500 hover:bg-blue-600">Sign Up</button>
+                        <button id="loginBtn" class="btn bg-green-500 hover:bg-green-600">Log In</button>
+                    `;
+                    // These event listeners must be attached here because the buttons are created dynamically
+                    document.getElementById('signUpBtn').addEventListener('click', handleSignUp);
+                    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+
+                    activateMembershipBtn.style.display = 'none'; // Only show after anonymous login
+                    confirmMembershipBtn.style.display = 'none';
+                    loginSignupMessage.textContent = 'Sign in or sign up to save your progress and access premium features.';
+                    viewMyProfileBtn.style.display = 'none'; // Hide "My Profile" button
+
+                    const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
+                    if (existingFullUserIdDisplay) {
+                        existingFullUserIdDisplay.remove(); // Remove if user logs out
+                    }
+                }
+            });
+        } else {
+            console.warn("Firebase Auth not initialized. Cannot listen for auth state changes.");
+            // Manually set initial UI state if auth is not available
+            document.addEventListener('DOMContentLoaded', () => {
+                const userIdDisplay = document.getElementById('userIdDisplay');
+                const membershipStatusDisplay = document.getElementById('membershipStatusDisplay');
+                const authButtons = document.getElementById('authButtons');
+                const activateMembershipBtn = document.getElementById('activateMembershipBtn');
+                const confirmMembershipBtn = document.getElementById('confirmMembershipBtn');
+                const loginSignupMessage = document.getElementById('loginSignupMessage');
+                const viewMyProfileBtn = document.getElementById('viewMyProfileBtn');
+
                 window.currentUserId = null;
                 window.isPremiumMember = false;
-                userIdDisplay.textContent = 'Not logged in.';
-                membershipStatusDisplay.textContent = 'Status: Free User';
+                userIdDisplay.textContent = 'Not logged in (Service Unavailable).';
+                membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
                 authButtons.innerHTML = `
                     <input type="email" id="emailInput" placeholder="Email" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
                     <input type="password" id="passwordInput" placeholder="Password" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
                     <button id="signUpBtn" class="btn bg-blue-500 hover:bg-blue-600">Sign Up</button>
                     <button id="loginBtn" class="btn bg-green-500 hover:bg-green-600">Log In</button>
                 `;
+                // Add event listeners to dynamically created buttons
                 document.getElementById('signUpBtn').addEventListener('click', handleSignUp);
                 document.getElementById('loginBtn').addEventListener('click', handleLogin);
-                activateMembershipBtn.style.display = 'none'; // Only show after anonymous login
+                activateMembershipBtn.style.display = 'none';
                 confirmMembershipBtn.style.display = 'none';
-                loginSignupMessage.textContent = 'Sign in or sign up to save your progress and access premium features.';
-
-                const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
-                if (existingFullUserIdDisplay) {
-                    existingFullUserIdDisplay.remove(); // Remove if user logs out
-                }
-            }
-        });
+                loginSignupMessage.textContent = 'App services unavailable. Please try again later.';
+                viewMyProfileBtn.style.display = 'none';
+                window.updateRecipeAccess(); // Still try to update access even if auth fails
+            });
+        }
 
         async function handleSignUp() {
+            if (!auth) {
+                window.showMessage("App services not available. Cannot sign up.", "error");
+                return;
+            }
             const email = document.getElementById('emailInput').value;
             const password = document.getElementById('passwordInput').value;
             if (!email || !password) {
@@ -330,6 +418,10 @@
         }
 
         async function handleLogin() {
+            if (!auth) {
+                window.showMessage("App services not available. Cannot log in.", "error");
+                return;
+            }
             const email = document.getElementById('emailInput').value;
             const password = document.getElementById('passwordInput').value;
             if (!email || !password) {
@@ -346,6 +438,10 @@
         }
 
         async function handleSignOut() {
+            if (!auth) {
+                window.showMessage("App services not available. Cannot sign out.", "error");
+                return;
+            }
             try {
                 await signOut(auth);
                 window.showMessage("Signed out successfully!", "info");
@@ -413,10 +509,10 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-        .profile-view, .recipe-view {
+        .profile-view, .recipe-view, .my-profile-view {
             display: none;
         }
-        .profile-view.active, .recipe-view.active {
+        .profile-view.active, .recipe-view.active, .my-profile-view.active {
             display: block;
             animation: fadeIn 0.5s ease-in-out;
         }
@@ -529,7 +625,7 @@
 
     <div class="container mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
 
-        <!-- Profile View -->
+        <!-- Profile View (Pip's Public Profile) -->
         <div id="profile-view" class="profile-view active bg-white rounded-2xl shadow-lg p-6 sm:p-8">
             <header class="text-center mb-8">
                 <div class="w-24 h-24 mx-auto rounded-full bg-amber-200 flex items-center justify-center text-5xl mb-4 shadow-md">
@@ -558,6 +654,9 @@
                     </button>
                     <button id="confirmMembershipBtn" class="btn bg-green-600 hover:bg-green-700" style="display:none;">
                         Confirm Membership Activation
+                    </button>
+                    <button id="viewMyProfileBtn" class="btn bg-blue-600 hover:bg-blue-700" style="display:none;">
+                        View My Profile
                     </button>
                 </div>
                 <div id="globalMessageBox" class="hidden"></div>
@@ -605,6 +704,19 @@
                     <div class="flex flex-col items-center">
                         <div class="highlight-circle" data-recipe="apple-pie">🍎</div>
                         <span class="text-sm text-stone-600 mt-2">Apple Pie</span>
+                    </div>
+                    <!-- New Highlights -->
+                    <div class="flex flex-col items-center page-2-recipe hidden">
+                        <div class="highlight-circle" data-recipe="berry-smoothie">🍓</div>
+                        <span class="text-sm text-stone-600 mt-2">Berry Smoothie</span>
+                    </div>
+                    <div class="flex flex-col items-center page-2-recipe hidden">
+                        <div class="highlight-circle" data-recipe="veggie-skewers">🍡</div>
+                        <span class="text-sm text-stone-600 mt-2">Veggie Skewers</span>
+                    </div>
+                    <div class="flex flex-col items-center page-2-recipe hidden">
+                        <div class="highlight-circle" data-recipe="seed-mix-cookies">🍪</div>
+                        <span class="text-sm text-stone-600 mt-2">Seed Cookies</span>
                     </div>
                 </div>
             </section>
@@ -655,12 +767,38 @@
                         <img src="https://i.imgur.com/LQYetF5.jpeg" alt="Pip's Apple Pie Post" onerror="this.onerror=null;this.src='https://placehold.co/600x600/FBD38D/7B341E?text=Apple+Pie';">
                         <div class="post-title-overlay">Sweet Apple Pie!</div>
                     </div>
+                    <!-- New Post Thumbnails -->
+                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="berry-smoothie">
+                        <img src="https://placehold.co/600x600/FBD38D/7B341E?text=Berry+Smoothie" alt="Pip's Berry Smoothie Post">
+                        <div class="post-title-overlay">Refreshing Berry Smoothie!</div>
+                    </div>
+                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="veggie-skewers">
+                        <img src="https://placehold.co/600x600/FBD38D/7B341E?text=Veggie+Skewers" alt="Pip's Veggie Skewers Post">
+                        <div class="post-title-overlay">Colorful Veggie Skewers!</div>
+                    </div>
+                    <div class="post-thumbnail page-2-recipe hidden" data-recipe="seed-mix-cookies">
+                        <img src="https://placehold.co/600x600/FBD38D/7B341E?text=Seed+Mix+Cookies" alt="Pip's Seed Mix Cookies Post">
+                        <div class="post-title-overlay">Nutty Seed Mix Cookies!</div>
+                    </div>
                 </div>
                 <div class="text-center mt-6">
                     <button id="loadMoreBtn" class="btn bg-amber-600 hover:bg-amber-700">Load More Recipes</button>
                     <button id="hideRecipesBtn" class="btn bg-stone-400 hover:bg-stone-500 hidden ml-4">Hide Recipes</button>
                 </div>
             </section>
+        </div>
+
+        <!-- My User Profile View -->
+        <div id="my-user-profile-view" class="my-profile-view bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+            <button id="back-to-pip-profile-btn" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg mb-6 transition-colors duration-300 flex items-center">
+                <span class="mr-2">←</span> Back to Pip's Profile
+            </button>
+            <h2 class="text-3xl font-bold text-amber-900 mb-4 text-center">My Profile</h2>
+            <div class="text-center mb-6">
+                <p id="myProfileUserId" class="font-semibold text-lg text-stone-700">User ID: N/A</p>
+                <p id="myProfileMembershipStatus" class="font-semibold text-lg text-stone-700 mt-2">Membership Status: Loading...</p>
+                <p class="text-sm text-stone-500 mt-4">This is your personal profile page. More features coming soon!</p>
+            </div>
         </div>
 
         <!-- Recipe Views (Initially Hidden) -->
@@ -767,8 +905,7 @@
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: The Shaping</h3>
                                 <p class="text-stone-700">Next, it was time for the "shaping" phase. Pip, with his tiny paws, was hard at work, patting down the mixture into a miniature brownie shape. He even did a little dance around the "dough" to make sure it was just right.</p>
                                 <div class="video-container mx-auto max-w-xl">
-                                    <video controls autoplay loop muted playsinline>
-                                        <source src="https://i.imgur.com/r8ESVks.mp4" type="video/mp4">
+                                    <source src="https://i.imgur.com/r8ESVks.mp4" type="video/mp4">
                                         Your browser does not support the video tag.
                                     </video>
                                 </div>
@@ -1319,6 +1456,180 @@
                 </section>
             </div>
 
+            <!-- Berry Smoothie Recipe (New) -->
+            <div id="berry-smoothie-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <section id="intro-berry-smoothie">
+                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
+                        <span class="text-4xl mr-3">🍓</span> Pip's Refreshing Berry Smoothie! <span class="text-4xl ml-3">🥤</span>
+                    </h2>
+                    <p class="text-stone-600 text-center leading-relaxed">
+                        Feeling thirsty? Pip is here to blend up a delightful and healthy "Berry Smoothie" – perfectly safe and delicious for a hamster! Get ready for a burst of fruity goodness.
+                    </p>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-amber-100 rounded-lg p-6">
+                        <div id="steps-container-berry-smoothie" class="relative min-h-[400px]">
+                            <div id="berry-smoothie-step-1" class="step-panel active">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: Gathering the Berries!</h3>
+                                <p class="text-stone-700">Pip starts by carefully selecting a few tiny, fresh berries (like blueberries or raspberries, in moderation!). He's making sure they're perfectly ripe for blending.</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://placehold.co/600x338/FBD38D/7B341E?text=Fresh+Berries" alt="Pip with fresh berries" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="berry-smoothie-step-2" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: The Tiny Blend!</h3>
+                                <p class="text-stone-700">Next, Pip adds his berries and a tiny splash of water to his miniature "blender" (a small, safe container). He's diligently pushing them around to create a smooth puree!</p>
+                                <div class="text-5xl text-center mt-6">🌀</div>
+                            </div>
+                            <div id="berry-smoothie-step-3" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: Pouring Perfection!</h3>
+                                <p class="text-stone-700">With the smoothie perfectly blended, Pip carefully "pours" it into his tiny serving dish. Look at that vibrant color!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://placehold.co/600x338/FBD38D/7B341E?text=Pouring+Smoothie" alt="Pip pouring smoothie" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="berry-smoothie-step-4" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: Refreshing Taste Test!</h3>
+                                <p class="text-stone-700">Pip takes a refreshing sip of his homemade berry smoothie. It's cool, fruity, and absolutely delicious! A perfect treat for a warm day.</p>
+                                <div class="text-5xl text-center mt-6">😋🥤</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
+                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 4</div>
+                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
+                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
+                        <p class="mt-2">Remember, while this was a fun, imaginary cooking adventure, <strong>hamsters should NEVER consume human smoothies, dairy, or excessive amounts of sugar!</strong> Berries should be given in very small, infrequent amounts. Pip's "smoothie" was made entirely of hamster-safe ingredients. Always research what foods are safe and appropriate for your pet!</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Veggie Skewers Recipe (New) -->
+            <div id="veggie-skewers-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <section id="intro-veggie-skewers">
+                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
+                        <span class="text-4xl mr-3">🍡</span> Pip's Colorful Veggie Skewers! <span class="text-4xl ml-3">🥕</span>
+                    </h2>
+                    <p class="text-stone-600 text-center leading-relaxed">
+                        Time for a healthy and vibrant snack! Pip is assembling his gourmet "Veggie Skewers," packed with fresh, hamster-safe vegetables. It's a feast for the eyes and the tiny tummy!
+                    </p>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-amber-100 rounded-lg p-6">
+                        <div id="steps-container-veggie-skewers" class="relative min-h-[400px]">
+                            <div id="veggie-skewers-step-1" class="step-panel active">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: Chopping the Veggies!</h3>
+                                <p class="text-stone-700">Pip begins by carefully "chopping" tiny pieces of fresh, safe vegetables like carrot, cucumber, and bell pepper. He's making sure each piece is just the right size for his skewers!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://placehold.co/600x338/FBD38D/7B341E?text=Chopped+Veggies" alt="Pip chopping vegetables" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="veggie-skewers-step-2" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Assembling the Skewers!</h3>
+                                <p class="text-stone-700">Now for the artistic part! Pip is meticulously threading his colorful veggie pieces onto tiny, safe sticks (like pieces of uncooked pasta). He's creating a beautiful, edible masterpiece!</p>
+                                <div class="text-5xl text-center mt-6">🍢</div>
+                            </div>
+                            <div id="veggie-skewers-step-3" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: The Presentation!</h3>
+                                <p class="text-stone-700">Pip proudly displays his finished veggie skewers. They're vibrant, fresh, and ready to be enjoyed. A true culinary artist at work!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://placehold.co/600x338/FBD38D/7B341E?text=Veggie+Skewers+Ready" alt="Pip with veggie skewers" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="veggie-skewers-step-4" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: The Crunchy Bite!</h3>
+                                <p class="text-stone-700">The moment of truth! Pip takes a satisfying bite from his veggie skewer. The crunch is delightful, and the fresh flavors are a hit!</p>
+                                <div class="video-container mx-auto max-w-xl">
+                                    <video controls autoplay loop muted playsinline>
+                                        <source src="https://i.imgur.com/XONtBs7.mp4" type="video/mp4"> <!-- Reusing video for demonstration -->
+                                        Your browser does not support the video tag.
+                                    </video>
+                                </div>
+                            </div>
+                            <div id="veggie-skewers-step-5" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: Happy Snacking!</h3>
+                                <p class="text-stone-700">Pip continues to enjoy his healthy snack, proving that even tiny chefs can appreciate nutritious and delicious food. What a happy little gourmet!</p>
+                                <div class="text-5xl text-center mt-6">😋🥦</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
+                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
+                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
+                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
+                        <p class="mt-2">Remember, while this was a fun, imaginary cooking adventure, <strong>always ensure all vegetables are safe for hamsters and given in moderation!</strong> Avoid onions, garlic, and citrus. The "skewers" should be made of safe materials like uncooked pasta or thin, untreated wood. Always research what foods are safe and appropriate for your pet!</p>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Seed Mix Cookies Recipe (New) -->
+            <div id="seed-mix-cookies-recipe" class="hidden bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                <section id="intro-seed-mix-cookies">
+                    <h2 class="text-3xl font-bold text-amber-800 mb-4 flex items-center justify-center text-center">
+                        <span class="text-4xl mr-3">🍪</span> Pip's Nutty Seed Mix Cookies! <span class="text-4xl ml-3">🌰</span>
+                    </h2>
+                    <p class="text-stone-600 text-center leading-relaxed">
+                        Get ready for a crunchy, wholesome treat! Pip is baking up a batch of his famous "Seed Mix Cookies," packed with nutritious seeds and grains. These are a hamster's dream come true!
+                    </p>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-amber-100 rounded-lg p-6">
+                        <div id="steps-container-seed-mix-cookies" class="relative min-h-[400px]">
+                            <div id="seed-mix-cookies-step-1" class="step-panel active">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 1: Gathering the Seeds!</h3>
+                                <p class="text-stone-700">Pip starts by collecting his favorite hamster-safe seeds: sunflower seeds (unsalted, in moderation), pumpkin seeds, and a few oats. He's making sure he has a perfect mix for maximum crunch!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://placehold.co/600x338/FBD38D/7B341E?text=Seed+Mix" alt="Pip with seed mix ingredients" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="seed-mix-cookies-step-2" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Mixing the Cookie Dough!</h3>
+                                <p class="text-stone-700">Next, Pip combines his seed mix with a tiny bit of finely ground hamster pellets and a few drops of water to form a sticky dough. He's diligently mixing to ensure every cookie is packed with goodness!</p>
+                                <div class="text-5xl text-center mt-6">🥣</div>
+                            </div>
+                            <div id="seed-mix-cookies-step-3" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 3: Shaping the Cookies!</h3>
+                                <p class="text-stone-700">Pip meticulously rolls and flattens small portions of the dough into perfect, bite-sized "cookies." He's a true artisan, even with tiny treats!</p>
+                                <div class="image-container mx-auto max-w-xl">
+                                    <img src="https://placehold.co/600x338/FBD38D/7B341E?text=Shaping+Cookies" alt="Pip shaping cookies" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
+                                </div>
+                            </div>
+                            <div id="seed-mix-cookies-step-4" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: "Baking" to Crunchy Perfection!</h3>
+                                <p class="text-stone-700">The cookies are gently air-dried or lightly toasted to achieve that perfect, satisfying crunch. Pip patiently waits for his delicious creations to be ready.</p>
+                                <div class="text-5xl text-center mt-6">🔥</div>
+                            </div>
+                            <div id="seed-mix-cookies-step-5" class="step-panel">
+                                <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: The Ultimate Crunch Test!</h3>
+                                <p class="text-stone-700">Finally, the moment of truth! Pip happily munches on his homemade "Seed Mix Cookie." The crunch is delightful, and the nutty flavors are a huge success! A very satisfied little baker.</p>
+                                <div class="text-5xl text-center mt-6">🍪🤤</div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
+                            <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
+                            <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-10">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
+                        <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
+                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human cookies, sugar, chocolate, or heavily processed grains!</strong> Seeds should be given in moderation as treats due to their fat content. Pip's "cookies" were made entirely of hamster-safe ingredients. Always research what foods are safe and appropriate for your pet!</p>
+                    </div>
+                </section>
+            </div>
+
         </div>
 
     </div>
@@ -1327,7 +1638,10 @@
         document.addEventListener('DOMContentLoaded', () => {
             const profileView = document.getElementById('profile-view');
             const recipeContainer = document.getElementById('recipe-container');
-            const backToProfileBtn = document.getElementById('back-to-profile-btn');
+            const myUserProfileView = document.getElementById('my-user-profile-view'); // New profile view
+            const backToProfileBtn = document.getElementById('back-to-profile-btn'); // For recipe view
+            const backToPipProfileBtn = document.getElementById('back-to-pip-profile-btn'); // For my user profile view
+            const viewMyProfileBtn = document.getElementById('viewMyProfileBtn'); // Button to open my profile
             const loadMoreBtn = document.getElementById('loadMoreBtn');
             const hideRecipesBtn = document.getElementById('hideRecipesBtn');
             const page2Recipes = document.querySelectorAll('.page-2-recipe');
@@ -1338,9 +1652,12 @@
             // updateRecipeView is now globally available via window.updateRecipeView
             
             function showView(viewId) {
+                // Hide all main views first
                 profileView.classList.remove('active');
                 recipeContainer.classList.remove('active');
+                myUserProfileView.classList.remove('active');
                 
+                // Show the requested view
                 document.getElementById(viewId).classList.add('active');
             }
 
@@ -1390,8 +1707,7 @@
                     activeRecipeId = recipeId; // Assign to the global activeRecipeId
                     document.querySelectorAll('.recipe-view > div').forEach(div => div.classList.add('hidden'));
                     document.getElementById(`${activeRecipeId}-recipe`).classList.remove('hidden');
-                    recipeContainer.classList.add('active');
-                    profileView.classList.remove('active');
+                    showView('recipe-container'); // Show recipe container
                     window.updateRecipeView(activeRecipeId); // Use window.updateRecipeView
                 });
             });
@@ -1408,29 +1724,33 @@
                         activeRecipeId = recipeId; // Assign to the global activeRecipeId
                         document.querySelectorAll('.recipe-view > div').forEach(div => div.classList.add('hidden'));
                         document.getElementById(`${activeRecipeId}-recipe`).classList.remove('hidden');
-                        recipeContainer.classList.add('active');
-                        profileView.classList.remove('active');
+                        showView('recipe-container'); // Show recipe container
                         window.updateRecipeView(activeRecipeId); // Use window.updateRecipeView
                     }
                 });
             });
 
-            // Event listeners for recipe navigation buttons (delegated)
-            recipeContainer.addEventListener('click', (event) => {
-                if (event.target.classList.contains('prev-btn') || event.target.classList.contains('next-btn')) {
-                    handleRecipeNavigation(event);
-                }
-            });
-
-            // Back to Profile button
+            // Back to Pip's Profile button from Recipe View
             backToProfileBtn.addEventListener('click', () => {
-                recipeContainer.classList.remove('active');
-                profileView.classList.add('active');
+                showView('profile-view'); // Show Pip's profile
                 // Reset current step for the last viewed recipe when going back to profile
                 if (activeRecipeId) {
                     window.recipeData[activeRecipeId].currentStep = 1; // Access from global window.recipeData
                 }
                 activeRecipeId = null; // Reset global activeRecipeId
+            });
+
+            // Back to Pip's Profile button from My User Profile View
+            backToPipProfileBtn.addEventListener('click', () => {
+                showView('profile-view'); // Show Pip's profile
+            });
+
+            // View My Profile button
+            viewMyProfileBtn.addEventListener('click', () => {
+                showView('my-user-profile-view'); // Show the new user profile view
+                // Update content of My Profile section
+                document.getElementById('myProfileUserId').textContent = `User ID: ${window.currentUserId}`;
+                document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: ${window.isPremiumMember ? 'Premium ✨' : 'Free'}`;
             });
 
             // Load More Recipes button functionality
