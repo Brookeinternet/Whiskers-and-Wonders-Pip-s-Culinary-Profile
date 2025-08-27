@@ -24,7 +24,8 @@
             measurementId: "G-GRNXVKZR3S"
         };
         
-        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : providedFirebaseConfig.appId;
+        const firebaseConfig = providedFirebaseConfig; // Use the provided config directly
 
         // Initialize Firebase app only if config is available
         let app, auth, db;
