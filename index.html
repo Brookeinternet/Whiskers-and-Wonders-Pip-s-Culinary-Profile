@@ -420,8 +420,10 @@
                             window.updateRecipeAccess(); // Update UI based on membership
                             // Update My Profile section
                             if (myUserProfileView && myUserProfileView.classList.contains('active')) {
-                                document.getElementById('myProfileUserId').textContent = `User ID: ${user.uid}`;
-                                document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: ${window.isPremiumMember ? 'Premium ✨' : 'Free'}`;
+                                const myProfileUserId = document.getElementById('myProfileUserId');
+                                if(myProfileUserId) myProfileUserId.textContent = `User ID: ${user.uid}`;
+                                const myProfileMembershipStatus = document.getElementById('myProfileMembershipStatus');
+                                if(myProfileMembershipStatus) myProfileMembershipStatus.textContent = `Membership Status: ${window.isPremiumMember ? 'Premium ✨' : 'Free'}`;
                             }
                         }, (error) => {
                             console.error("Error listening to membership status:", error);
@@ -429,8 +431,10 @@
                             if(membershipStatusDisplay) membershipStatusDisplay.textContent = 'Status: Free User (Error loading status)';
                             window.updateRecipeAccess();
                             if (myUserProfileView && myUserProfileView.classList.contains('active')) {
-                                document.getElementById('myProfileUserId').textContent = `User ID: ${user.uid}`;
-                                document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: Free (Error loading status)`;
+                                const myProfileUserId = document.getElementById('myProfileUserId');
+                                if(myProfileUserId) myProfileUserId.textContent = `User ID: ${user.uid}`;
+                                const myProfileMembershipStatus = document.getElementById('myProfileMembershipStatus');
+                                if(myProfileMembershipStatus) myProfileMembershipStatus.textContent = `Membership Status: Free (Error loading status)`;
                             }
                         });
                     } else {
@@ -438,8 +442,10 @@
                         if(membershipStatusDisplay) membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
                         window.updateRecipeAccess();
                         if (myUserProfileView && myUserProfileView.classList.contains('active')) {
-                            document.getElementById('myProfileUserId').textContent = `User ID: ${user.uid}`;
-                            document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: Free (Service Unavailable)`;
+                            const myProfileUserId = document.getElementById('myProfileUserId');
+                            if(myProfileUserId) myProfileUserId.textContent = `User ID: ${user.uid}`;
+                            const myProfileMembershipStatus = document.getElementById('myProfileMembershipStatus');
+                            if(myProfileMembershipStatus) myProfileMembershipStatus.textContent = `Membership Status: Free (Service Unavailable)`;
                         }
                     }
 
@@ -978,7 +984,7 @@
                                     </video>
                                 </div>
                             </div>
-                            <div id="pancakes-step-4" class-="step-panel">
+                            <div id="pancakes-step-4" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: Stacking & Topping</h3>
                                 <p class="text-stone-700">After all that expert flipping, it's time to stack those golden-brown beauties! Pip carefully arranges his miniature pancakes into a delightful tower, ready for the final touch: a tiny, fresh blueberry. Yum!</p>
                                 <div class="video-container mx-auto max-w-xl">
@@ -1289,7 +1295,7 @@
                                     </video>
                                 </div>
                             </div>
-                            <div id="carrot-cake-step-2" class-="step-panel">
+                            <div id="carrot-cake-step-2" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Mixing the Batter!</h3>
                                 <p class="text-stone-700">Next, Pip combines the grated carrot with finely ground hamster pellets and a tiny bit of water to form a moist, delicious batter. He's mixing it with all his might!</p>
                                 <div class="image-container mx-auto max-w-xl">
@@ -1351,7 +1357,7 @@
                                 <p class="text-stone-700">Pip begins by carefully crushing tiny, unsalted sunflower seeds. He knows these are the key to his bread's hearty flavor!</p>
                                 <div class="text-5xl text-center mt-6">🔨</div>
                             </div>
-                            <div id="sunflower-seed-bread-step-2" class="step-panel">
+                            <div id="sunflower-seed-bread-step-2" class-="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Mixing the Dough!</h3>
                                 <p class="text-stone-700">The crushed seeds are mixed with finely ground hamster pellets and a touch of water to form a stiff dough. Pip is kneading with all his might!</p>
                                 <div class="video-container mx-auto max-w-xl">
@@ -1438,7 +1444,7 @@
                                     </video>
                                 </div>
                             </div>
-                            <div id="apple-pie-step-5" class-="step-panel">
+                            <div id="apple-pie-step-5" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: The Sweetest Taste Test!</h3>
                                 <p class="text-stone-700">Pip takes a joyful bite of his homemade "Apple Pie." The natural sweetness of the apple and the crunchy crust are a perfect combination!</p>
                                 <div class="text-5xl text-center mt-6">🍎😋</div>
