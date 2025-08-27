@@ -365,6 +365,7 @@
                 console.log("Auth state changed. User:", user);
 
                 if (!user) { // If no user is currently logged in
+                    // Only attempt custom token sign-in if the token is provided and not an empty string
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token !== '') {
                         try {
                             await signInWithCustomToken(auth, __initial_auth_token);
@@ -372,26 +373,25 @@
                         } catch (error) {
                             console.error("Error signing in with custom token:", error);
                             window.showMessage("Automatic sign-in failed. Please use the login form.", "info");
-                            // Do not try anonymous sign-in, just display the login form.
                         }
-                    } else {
-                        // If no custom token is provided or it's empty, do nothing and the login form will be displayed.
-                        console.log("No custom auth token provided or it's empty. Displaying login form.");
                     }
                 }
 
                 if (user) {
                     window.currentUserId = user.uid;
-                    userIdDisplay.textContent = `Logged in as: ${user.isAnonymous ? 'Anonymous' : user.email || user.uid}`; // Show UID for anonymous
-                    authButtons.innerHTML = `<button id="signOutBtn" class="btn bg-red-500 hover:bg-red-600">Sign Out</button>`;
-                    document.getElementById('signOutBtn').addEventListener('click', handleSignOut);
-                    viewMyProfileBtn.style.display = 'inline-block'; // Show "My Profile" button
+                    if (userIdDisplay) userIdDisplay.textContent = `Logged in as: ${user.isAnonymous ? 'Anonymous' : user.email || user.uid}`; // Show UID for anonymous
+                    if (authButtons) {
+                         authButtons.innerHTML = `<button id="signOutBtn" class="btn bg-red-500 hover:bg-red-600">Sign Out</button>`;
+                         const signOutBtn = document.getElementById('signOutBtn');
+                         if(signOutBtn) signOutBtn.addEventListener('click', handleSignOut);
+                    }
+                    if (viewMyProfileBtn) viewMyProfileBtn.style.display = 'inline-block'; // Show "My Profile" button
 
                     // Display full userId for multi-user apps (as per instructions)
-                    const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
+                    const existingFullUserIdDisplay = userIdDisplay ? userIdDisplay.parentNode.querySelector('.full-user-id-display') : null;
                     if (existingFullUserIdDisplay) {
                         existingFullUserIdDisplay.textContent = `User ID: ${user.uid}`;
-                    } else {
+                    } else if (userIdDisplay) {
                         const fullUserIdDisplay = document.createElement('p');
                         fullUserIdDisplay.className = "text-sm text-gray-500 mt-1 full-user-id-display";
                         fullUserIdDisplay.textContent = `User ID: ${user.uid}`;
@@ -406,38 +406,38 @@
                         onSnapshot(userProfileRef, (docSnap) => {
                             if (docSnap.exists() && docSnap.data().status === 'premium') {
                                 window.isPremiumMember = true;
-                                membershipStatusDisplay.textContent = 'Status: Premium Member ✨';
-                                activateMembershipBtn.style.display = 'none';
-                                confirmMembershipBtn.style.display = 'none';
-                                loginSignupMessage.textContent = ''; // Clear message
+                                if(membershipStatusDisplay) membershipStatusDisplay.textContent = 'Status: Premium Member ✨';
+                                if(activateMembershipBtn) activateMembershipBtn.style.display = 'none';
+                                if(confirmMembershipBtn) confirmMembershipBtn.style.display = 'none';
+                                if(loginSignupMessage) loginSignupMessage.textContent = ''; // Clear message
                             } else {
                                 window.isPremiumMember = false;
-                                membershipStatusDisplay.textContent = 'Status: Free User';
-                                activateMembershipBtn.style.display = 'inline-block';
-                                confirmMembershipBtn.style.display = 'none'; // Hide confirm until payment link is visited
-                                loginSignupMessage.textContent = 'Upgrade to unlock all recipes!';
+                                if(membershipStatusDisplay) membershipStatusDisplay.textContent = 'Status: Free User';
+                                if(activateMembershipBtn) activateMembershipBtn.style.display = 'inline-block';
+                                if(confirmMembershipBtn) confirmMembershipBtn.style.display = 'none'; // Hide confirm until payment link is visited
+                                if(loginSignupMessage) loginSignupMessage.textContent = 'Upgrade to unlock all recipes!';
                             }
                             window.updateRecipeAccess(); // Update UI based on membership
                             // Update My Profile section
-                            if (myUserProfileView.classList.contains('active')) {
+                            if (myUserProfileView && myUserProfileView.classList.contains('active')) {
                                 document.getElementById('myProfileUserId').textContent = `User ID: ${user.uid}`;
                                 document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: ${window.isPremiumMember ? 'Premium ✨' : 'Free'}`;
                             }
                         }, (error) => {
                             console.error("Error listening to membership status:", error);
                             window.isPremiumMember = false;
-                            membershipStatusDisplay.textContent = 'Status: Free User (Error loading status)';
+                            if(membershipStatusDisplay) membershipStatusDisplay.textContent = 'Status: Free User (Error loading status)';
                             window.updateRecipeAccess();
-                            if (myUserProfileView.classList.contains('active')) {
+                            if (myUserProfileView && myUserProfileView.classList.contains('active')) {
                                 document.getElementById('myProfileUserId').textContent = `User ID: ${user.uid}`;
                                 document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: Free (Error loading status)`;
                             }
                         });
                     } else {
                         console.warn("Firestore not initialized, cannot check membership status.");
-                        membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
+                        if(membershipStatusDisplay) membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
                         window.updateRecipeAccess();
-                        if (myUserProfileView.classList.contains('active')) {
+                        if (myUserProfileView && myUserProfileView.classList.contains('active')) {
                             document.getElementById('myProfileUserId').textContent = `User ID: ${user.uid}`;
                             document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: Free (Service Unavailable)`;
                         }
@@ -446,24 +446,26 @@
                 } else {
                     window.currentUserId = null;
                     window.isPremiumMember = false;
-                    userIdDisplay.textContent = 'Not logged in.';
-                    membershipStatusDisplay.textContent = 'Status: Free User';
-                    authButtons.innerHTML = `
-                        <input type="email" id="emailInput" placeholder="Email" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
-                        <input type="password" id="passwordInput" placeholder="Password" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
-                        <button id="signUpBtn" class="btn bg-blue-500 hover:bg-blue-600">Sign Up</button>
-                        <button id="loginBtn" class="btn bg-green-500 hover:bg-green-600">Log In</button>
-                    `;
-                    // These event listeners must be attached here because the buttons are created dynamically
-                    document.getElementById('signUpBtn').addEventListener('click', handleSignUp);
-                    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+                    if(userIdDisplay) userIdDisplay.textContent = 'Not logged in.';
+                    if(membershipStatusDisplay) membershipStatusDisplay.textContent = 'Status: Free User';
+                    if(authButtons) {
+                        authButtons.innerHTML = `
+                            <input type="email" id="emailInput" placeholder="Email" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
+                            <input type="password" id="passwordInput" placeholder="Password" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
+                            <button id="signUpBtn" class="btn bg-blue-500 hover:bg-blue-600">Sign Up</button>
+                            <button id="loginBtn" class="btn bg-green-500 hover:bg-green-600">Log In</button>
+                        `;
+                        // These event listeners must be attached here because the buttons are created dynamically
+                        document.getElementById('signUpBtn').addEventListener('click', handleSignUp);
+                        document.getElementById('loginBtn').addEventListener('click', handleLogin);
+                    }
 
-                    activateMembershipBtn.style.display = 'none'; // Only show after anonymous login
-                    confirmMembershipBtn.style.display = 'none';
-                    loginSignupMessage.textContent = 'Sign in or sign up to save your progress and access premium features.';
-                    viewMyProfileBtn.style.display = 'none'; // Hide "My Profile" button
+                    if(activateMembershipBtn) activateMembershipBtn.style.display = 'none'; // Only show after anonymous login
+                    if(confirmMembershipBtn) confirmMembershipBtn.style.display = 'none';
+                    if(loginSignupMessage) loginSignupMessage.textContent = 'Sign in or sign up to save your progress and access premium features.';
+                    if(viewMyProfileBtn) viewMyProfileBtn.style.display = 'none'; // Hide "My Profile" button
 
-                    const existingFullUserIdDisplay = userIdDisplay.parentNode.querySelector('.full-user-id-display');
+                    const existingFullUserIdDisplay = userIdDisplay ? userIdDisplay.parentNode.querySelector('.full-user-id-display') : null;
                     if (existingFullUserIdDisplay) {
                         existingFullUserIdDisplay.remove(); // Remove if user logs out
                     }
@@ -484,20 +486,22 @@
 
                 window.currentUserId = null;
                 window.isPremiumMember = false;
-                userIdDisplay.textContent = 'Not logged in (Service Unavailable).';
-                membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
-                authButtons.innerHTML = `
-                    <input type="email" id="emailInput" placeholder="Email" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
-                    <input type="password" id="passwordInput" placeholder="Password" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
-                    <button id="signUpBtn" class="btn bg-blue-500 hover:bg-blue-600">Sign Up</button>
-                    <button id="loginBtn" class="btn bg-green-500 hover:bg-green-600">Log In</button>
-                `;
-                // Add event listeners to dynamically created buttons
-                document.getElementById('signUpBtn').addEventListener('click', handleSignUp);
-                document.getElementById('loginBtn').addEventListener('click', handleLogin);
+                if(userIdDisplay) userIdDisplay.textContent = 'Not logged in (Service Unavailable).';
+                if(membershipStatusDisplay) membershipStatusDisplay.textContent = 'Status: Free User (Service Unavailable)';
+                if(authButtons) {
+                    authButtons.innerHTML = `
+                        <input type="email" id="emailInput" placeholder="Email" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
+                        <input type="password" id="passwordInput" placeholder="Password" class="p-2 rounded-md border border-gray-300 w-full sm:w-auto mb-2 sm:mb-0">
+                        <button id="signUpBtn" class="btn bg-blue-500 hover:bg-blue-600">Sign Up</button>
+                        <button id="loginBtn" class="btn bg-green-500 hover:bg-green-600">Log In</button>
+                    `;
+                    // Add event listeners to dynamically created buttons
+                    document.getElementById('signUpBtn').addEventListener('click', handleSignUp);
+                    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+                }
                 if (activateMembershipBtn) activateMembershipBtn.style.display = 'none'; // Check if element exists
                 if (confirmMembershipBtn) confirmMembershipBtn.style.display = 'none'; // Check if element exists
-                loginSignupMessage.textContent = 'App services unavailable. Please try again later.';
+                if(loginSignupMessage) loginSignupMessage.textContent = 'App services unavailable. Please try again later.';
                 if (viewMyProfileBtn) viewMyProfileBtn.style.display = 'none'; // Check if element exists
                 window.updateRecipeAccess(); // Still try to update access even if auth fails
             });
@@ -620,7 +624,7 @@
         }
         .btn:active {
             transform: translateY(0);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
         }
         .btn:disabled {
             background-color: #fed7aa; /* Amber-200 */
@@ -835,7 +839,7 @@
                                     <img src="https://i.imgur.com/U6OTflt.jpeg" alt="Pip preparing fried chicken ingredients" onerror="this.onerror=null;this.src='https://placehold.co/600x338/E5E7EB/4B5563?text=Image+Not+Found';">
                                 </div>
                             </div>
-                            <div id="fried-chicken-step-2" class="step-panel">
+                            <div id="fried-chicken-step-2" class-="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: The Crispy Coating!</h3>
                                 <p class="text-stone-700">Now for the secret to that famous crunch! Pip is meticulously coating each "chicken" piece with a mixture of plain, unsweetened oat flour and a tiny sprinkle of hamster-safe herbs (like dried parsley). He's rolling them around to get every bit covered!</p>
                                 <div class="image-container mx-auto max-w-xl">
@@ -974,7 +978,7 @@
                                     </video>
                                 </div>
                             </div>
-                            <div id="pancakes-step-4" class="step-panel">
+                            <div id="pancakes-step-4" class-="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 4: Stacking & Topping</h3>
                                 <p class="text-stone-700">After all that expert flipping, it's time to stack those golden-brown beauties! Pip carefully arranges his miniature pancakes into a delightful tower, ready for the final touch: a tiny, fresh blueberry. Yum!</p>
                                 <div class="video-container mx-auto max-w-xl">
@@ -1245,7 +1249,7 @@
                             <div id="hamburger-step-5" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: The Big Bite!</h3>
                                 <p class="text-stone-700">The moment of truth! Pip takes a triumphant bite out of his super cute "hamburger." The layers, the textures, the hamster-safe flavors – it's all a huge success! He's one satisfied little chef.</p>
-                                <div class="text-5xl text-center mt-6">�😋</div>
+                                <div class="text-5xl text-center mt-6">🍔😋</div>
                             </div>
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
@@ -1285,7 +1289,7 @@
                                     </video>
                                 </div>
                             </div>
-                            <div id="carrot-cake-step-2" class="step-panel">
+                            <div id="carrot-cake-step-2" class-="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 2: Mixing the Batter!</h3>
                                 <p class="text-stone-700">Next, Pip combines the grated carrot with finely ground hamster pellets and a tiny bit of water to form a moist, delicious batter. He's mixing it with all his might!</p>
                                 <div class="image-container mx-auto max-w-xl">
@@ -1434,7 +1438,7 @@
                                     </video>
                                 </div>
                             </div>
-                            <div id="apple-pie-step-5" class="step-panel">
+                            <div id="apple-pie-step-5" class-="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: The Sweetest Taste Test!</h3>
                                 <p class="text-stone-700">Pip takes a joyful bite of his homemade "Apple Pie." The natural sweetness of the apple and the crunchy crust are a perfect combination!</p>
                                 <div class="text-5xl text-center mt-6">🍎😋</div>
@@ -1649,12 +1653,13 @@
             
             function showView(viewId) {
                 // Hide all main views first
-                profileView.classList.remove('active');
-                recipeContainer.classList.remove('active');
-                myUserProfileView.classList.remove('active');
+                if(profileView) profileView.classList.remove('active');
+                if(recipeContainer) recipeContainer.classList.remove('active');
+                if(myUserProfileView) myUserProfileView.classList.remove('active');
                 
                 // Show the requested view
-                document.getElementById(viewId).classList.add('active');
+                const view = document.getElementById(viewId);
+                if(view) view.classList.add('active');
             }
 
             function handleRecipeNavigation(event) {
@@ -1700,11 +1705,11 @@
                         window.showMessage("Upgrade to Premium to unlock this recipe!", "error");
                         return;
                     }
-                    activeRecipeId = recipeId; // Assign to the global activeRecipeId
+                    window.activeRecipeId = recipeId; // Assign to the global activeRecipeId
                     document.querySelectorAll('.recipe-view > div').forEach(div => div.classList.add('hidden'));
-                    document.getElementById(`${activeRecipeId}-recipe`).classList.remove('hidden');
+                    document.getElementById(`${window.activeRecipeId}-recipe`).classList.remove('hidden');
                     showView('recipe-container'); // Show recipe container
-                    window.updateRecipeView(activeRecipeId); // Use window.updateRecipeView
+                    window.updateRecipeView(window.activeRecipeId); // Use window.updateRecipeView
                 });
             });
 
@@ -1717,11 +1722,11 @@
                             window.showMessage("Upgrade to Premium to unlock this recipe!", "error");
                             return;
                         }
-                        activeRecipeId = recipeId; // Assign to the global activeRecipeId
+                        window.activeRecipeId = recipeId; // Assign to the global activeRecipeId
                         document.querySelectorAll('.recipe-view > div').forEach(div => div.classList.add('hidden'));
-                        document.getElementById(`${activeRecipeId}-recipe`).classList.remove('hidden');
+                        document.getElementById(`${window.activeRecipeId}-recipe`).classList.remove('hidden');
                         showView('recipe-container'); // Show recipe container
-                        window.updateRecipeView(activeRecipeId); // Use window.updateRecipeView
+                        window.updateRecipeView(window.activeRecipeId); // Use window.updateRecipeView
                     }
                 });
             });
@@ -1730,10 +1735,10 @@
             backToProfileBtn.addEventListener('click', () => {
                 showView('profile-view'); // Show Pip's profile
                 // Reset current step for the last viewed recipe when going back to profile
-                if (activeRecipeId) {
-                    window.recipeData[activeRecipeId].currentStep = 1; // Access from global window.recipeData
+                if (window.activeRecipeId) {
+                    window.recipeData[window.activeRecipeId].currentStep = 1; // Access from global window.recipeData
                 }
-                activeRecipeId = null; // Reset global activeRecipeId
+                window.activeRecipeId = null; // Reset global activeRecipeId
             });
 
             // Back to Pip's Profile button from My User Profile View
@@ -1742,28 +1747,34 @@
             });
 
             // View My Profile button
-            viewMyProfileBtn.addEventListener('click', () => {
-                showView('my-user-profile-view'); // Show the new user profile view
-                // Update content of My Profile section
-                document.getElementById('myProfileUserId').textContent = `User ID: ${window.currentUserId}`;
-                document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: ${window.isPremiumMember ? 'Premium ✨' : 'Free'}`;
-            });
+            if(viewMyProfileBtn) {
+              viewMyProfileBtn.addEventListener('click', () => {
+                  showView('my-user-profile-view'); // Show the new user profile view
+                  // Update content of My Profile section
+                  document.getElementById('myProfileUserId').textContent = `User ID: ${window.currentUserId}`;
+                  document.getElementById('myProfileMembershipStatus').textContent = `Membership Status: ${window.isPremiumMember ? 'Premium ✨' : 'Free'}`;
+              });
+            }
 
             // Load More Recipes button functionality
-            loadMoreBtn.addEventListener('click', () => {
-                page2Recipes.forEach(recipe => recipe.classList.remove('hidden'));
-                loadMoreBtn.classList.add('hidden');
-                hideRecipesBtn.classList.remove('hidden');
-                window.updateRecipeAccess(); // Re-apply access rules after showing new recipes
-            });
+            if(loadMoreBtn) {
+              loadMoreBtn.addEventListener('click', () => {
+                  page2Recipes.forEach(recipe => recipe.classList.remove('hidden'));
+                  loadMoreBtn.classList.add('hidden');
+                  hideRecipesBtn.classList.remove('hidden');
+                  window.updateRecipeAccess(); // Re-apply access rules after showing new recipes
+              });
+            }
 
             // Hide Recipes button functionality
-            hideRecipesBtn.addEventListener('click', () => {
-                page2Recipes.forEach(recipe => recipe.classList.add('hidden'));
-                hideRecipesBtn.classList.add('hidden');
-                loadMoreBtn.classList.remove('hidden');
-                window.updateRecipeAccess(); // Re-apply access rules after hiding recipes
-            });
+            if(hideRecipesBtn) {
+              hideRecipesBtn.addEventListener('click', () => {
+                  page2Recipes.forEach(recipe => recipe.classList.add('hidden'));
+                  hideRecipesBtn.classList.add('hidden');
+                  loadMoreBtn.classList.remove('hidden');
+                  window.updateRecipeAccess(); // Re-apply access rules after hiding recipes
+              });
+            }
 
             // Initial view setup
             showView('profile-view');
@@ -1773,4 +1784,3 @@
 
 </body>
 </html>
-�
