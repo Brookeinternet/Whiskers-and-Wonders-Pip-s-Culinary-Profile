@@ -12,10 +12,17 @@
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global variables for Firebase instances and user data
-        // Use __app_id and __firebase_config provided by the Canvas environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+      
+        const providedFirebaseConfig = {
+            apiKey: "AIzaSyBSPbMCpsZdQ3o5wp5X_QI_HZicXfuZFE0",
+            authDomain: "pipthechef.firebaseapp.com",
+            projectId: "pipthechef",
+            storageBucket: "pipthechef.firebasestorage.app",
+            messagingSenderId: "380947665181",
+            appId: "1:380947665181:web:5488ccbd5fad97b8fb11f4",
+            measurementId: "G-GRNXVKZR3S"
+        };
+
 
         // Initialize Firebase app only if config is available
         let app, auth, db;
@@ -247,23 +254,19 @@
 
                 console.log("Auth state changed. User:", user);
 
-                // Attempt to sign in with custom token first if available
-                if (typeof __initial_auth_token !== 'undefined' && !user) {
-                    try {
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                        // User will be set by the onAuthStateChanged listener after this
-                    } catch (error) {
-                        console.error("Error signing in with custom token:", error);
-                        window.showMessage("Failed to sign in automatically. Please try again or use email/password.", "error");
-                    }
-                } else if (typeof __initial_auth_token === 'undefined' && !user) {
-                    // If no custom token, sign in anonymously
-                    try {
-                        await signInAnonymously(auth);
-                        // User will be set by the onAuthStateChanged listener after this
-                    } catch (error) {
-                        console.error("Error signing in anonymously:", error);
-                        window.showMessage("Failed to sign in anonymously. Please try again.", "error");
+                if (!user) { // If no user is currently logged in
+                    if (typeof __initial_auth_token !== 'undefined') {
+                        try {
+                            await signInWithCustomToken(auth, __initial_auth_token);
+                            // If successful, onAuthStateChanged will be called again with the user
+                        } catch (error) {
+                            console.error("Error signing in with custom token:", error);
+                            window.showMessage("Automatic sign-in failed. Please use the login form.", "info");
+                            // Do not try anonymous sign-in, just display the login form.
+                        }
+                    } else {
+                        // If no custom token is provided, do nothing and the login form will be displayed.
+                        console.log("No custom auth token provided. Displaying login form.");
                     }
                 }
 
@@ -363,7 +366,8 @@
                 const userIdDisplay = document.getElementById('userIdDisplay');
                 const membershipStatusDisplay = document.getElementById('membershipStatusDisplay');
                 const authButtons = document.getElementById('authButtons');
-                const activateMembershipBtn = document.getElementById('activateMembershipBtn');
+                // Ensure these elements exist before trying to access their style property
+                const activateMembershipBtn = document.getElementById('activateMembershipBtn'); // Corrected ID
                 const confirmMembershipBtn = document.getElementById('confirmMembershipBtn');
                 const loginSignupMessage = document.getElementById('loginSignupMessage');
                 const viewMyProfileBtn = document.getElementById('viewMyProfileBtn');
@@ -381,10 +385,10 @@
                 // Add event listeners to dynamically created buttons
                 document.getElementById('signUpBtn').addEventListener('click', handleSignUp);
                 document.getElementById('loginBtn').addEventListener('click', handleLogin);
-                activateMembershipBtn.style.display = 'none';
-                confirmMembershipBtn.style.display = 'none';
+                if (activateMembershipBtn) activateMembershipBtn.style.display = 'none'; // Check if element exists
+                if (confirmMembershipBtn) confirmMembershipBtn.style.display = 'none'; // Check if element exists
                 loginSignupMessage.textContent = 'App services unavailable. Please try again later.';
-                viewMyProfileBtn.style.display = 'none';
+                if (viewMyProfileBtn) viewMyProfileBtn.style.display = 'none'; // Check if element exists
                 window.updateRecipeAccess(); // Still try to update access even if auth fails
             });
         }
@@ -859,7 +863,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -918,7 +921,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 4</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -986,7 +988,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -994,7 +995,7 @@
                 <section class="mt-10">
                     <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-r-lg" role="alert">
                         <h3 class="font-bold text-xl flex items-center"><span class="text-2xl mr-3">⚠️</span> Important Hamster Health Note!</h3>
-                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human sugar, chocolate, or processed foods!</strong> These are very dangerous for them. Pip's "pancakes" were made entirely of hamster-safe ingredients like pellets, mashed banana, and a tiny blueberry. Always research what foods are safe for your pet!</p>
+                        <p class="mt-2">Remember, while this was a fun, imaginary baking adventure, <strong>hamsters should NEVER eat human sugar, chocolate, or processed foods!</strong> These are very dangerous for them. Pip's "pancakes" were made entirely of hamster-safe ingredients. Always research what foods are safe for your pet!</p>
                     </div>
                 </section>
             </div>
@@ -1054,7 +1055,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -1117,7 +1117,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -1185,7 +1184,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -1248,7 +1246,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -1316,7 +1313,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -1375,7 +1371,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -1443,8 +1438,8 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
+                        </div>
                         </div>
                     </div>
                 </section>
@@ -1496,7 +1491,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 4</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -1559,7 +1553,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
@@ -1617,7 +1610,6 @@
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
                             <button class="prev-btn bg-amber-200 hover:bg-amber-300 text-amber-800 font-bold py-2 px-4 rounded-lg transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                            <div class="step-indicator text-sm font-medium text-stone-600">Step 1 of 5</div>
                             <button class="next-btn bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">Next</button>
                         </div>
                     </div>
