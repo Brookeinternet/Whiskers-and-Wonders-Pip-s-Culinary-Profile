@@ -12,7 +12,8 @@
         import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-      
+        // Global variables for Firebase instances and user data
+        // Use __app_id and __firebase_config provided by the Canvas environment
         const providedFirebaseConfig = {
             apiKey: "AIzaSyBSPbMCpsZdQ3o5wp5X_QI_HZicXfuZFE0",
             authDomain: "pipthechef.firebaseapp.com",
@@ -22,7 +23,8 @@
             appId: "1:380947665181:web:5488ccbd5fad97b8fb11f4",
             measurementId: "G-GRNXVKZR3S"
         };
-
+        
+        
 
         // Initialize Firebase app only if config is available
         let app, auth, db;
@@ -153,6 +155,9 @@
         };
         window.recipeData = recipeData; // Make recipeData globally accessible for updateRecipeAccess
 
+        // Declare activeRecipeId in a higher scope to be accessible by multiple functions
+        let activeRecipeId = null;
+
         // Function to show messages in a global message box
         // Made globally accessible by attaching to window
         window.showMessage = function(msg, type) {
@@ -203,9 +208,6 @@
             });
         }
 
-        // Declare activeRecipeId in a higher scope to be accessible by updateRecipeView
-        let activeRecipeId = null; 
-
         // Function to update the view of a specific recipe
         // Made globally accessible by attaching to window
         window.updateRecipeView = function(recipeId) {
@@ -240,6 +242,113 @@
             nextBtn.textContent = (recipe.currentStep === recipe.totalSteps) ? 'Finish!' : 'Next';
         }
 
+        // Helper functions for authentication
+        async function handleSignUp() {
+            if (!auth) {
+                window.showMessage("App services not available. Cannot sign up.", "error");
+                return;
+            }
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            if (!email || !password) {
+                window.showMessage("Please enter email and password.", "error");
+                return;
+            }
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                // Create a basic profile in Firestore for the new user
+                if (db) {
+                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
+                    await setDoc(userProfileRef, { status: 'free', createdAt: new Date() });
+                    window.showMessage("Signed up and logged in successfully!", "success");
+                } else {
+                    window.showMessage("Signed up, but Firestore is not available to save profile.", "info");
+                }
+            } catch (error) {
+                console.error("Error signing up:", error);
+                window.showMessage(`Sign Up Failed: ${error.message}`, "error");
+            }
+        }
+
+        async function handleLogin() {
+            if (!auth) {
+                window.showMessage("App services not available. Cannot log in.", "error");
+                return;
+            }
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            if (!email || !password) {
+                window.showMessage("Please enter email and password.", "error");
+                return;
+            }
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                window.showMessage("Logged in successfully!", "success");
+            } catch (error) {
+                console.error("Error logging in:", error);
+                window.showMessage(`Login Failed: ${error.message}`, "error");
+            }
+        }
+
+        async function handleSignOut() {
+            if (!auth) {
+                window.showMessage("App services not available. Cannot sign out.", "error");
+                return;
+            }
+            try {
+                await signOut(auth);
+                window.showMessage("Signed out successfully!", "info");
+                // No anonymous sign-in after sign out as requested
+            } catch (error) {
+                console.error("Error signing out:", error);
+                window.showMessage(`Sign Out Failed: ${error.message}`, "error");
+            }
+        }
+
+        async function handleActivateMembership() {
+            if (!window.currentUserId) {
+                window.showMessage("Please sign in or sign up first!", "error");
+                return;
+            }
+            if (window.isPremiumMember) {
+                window.showMessage("You are already a premium member!", "info");
+                return;
+            }
+
+            // Redirect to Stripe payment link
+            window.open(window.stripePaymentLink, '_blank');
+
+            // Show "Confirm Membership" button after redirection
+            document.getElementById('confirmMembershipBtn').style.display = 'inline-block';
+            window.showMessage("Please complete your purchase on Stripe. Then click 'Confirm Membership Activation' here.", "info");
+        }
+
+        async function handleConfirmMembership() {
+            if (!window.currentUserId) {
+                window.showMessage("You must be signed in to confirm membership.", "error");
+                return;
+            }
+            if (window.isPremiumMember) {
+                window.showMessage("You are already a premium member!", "info");
+                return;
+            }
+
+            try {
+                if (db) {
+                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${window.currentUserId}/profile/membership`);
+                    await setDoc(userProfileRef, { status: 'premium', activatedAt: new Date() }, { merge: true });
+                    window.showMessage("Membership activated! Welcome, Premium Chef!", "success");
+                    document.getElementById('confirmMembershipBtn').style.display = 'none'; // Hide button after activation
+                } else {
+                    window.showMessage("Firestore is not available to confirm membership.", "error");
+                }
+            } catch (error) {
+                console.error("Error confirming membership:", error);
+                window.showMessage(`Failed to activate membership: ${error.message}`, "error");
+            }
+        }
+
         // Only proceed with auth listener if auth is successfully initialized
         if (auth) {
             onAuthStateChanged(auth, async (user) => {
@@ -255,7 +364,7 @@
                 console.log("Auth state changed. User:", user);
 
                 if (!user) { // If no user is currently logged in
-                    if (typeof __initial_auth_token !== 'undefined') {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token !== '') {
                         try {
                             await signInWithCustomToken(auth, __initial_auth_token);
                             // If successful, onAuthStateChanged will be called again with the user
@@ -265,8 +374,8 @@
                             // Do not try anonymous sign-in, just display the login form.
                         }
                     } else {
-                        // If no custom token is provided, do nothing and the login form will be displayed.
-                        console.log("No custom auth token provided. Displaying login form.");
+                        // If no custom token is provided or it's empty, do nothing and the login form will be displayed.
+                        console.log("No custom auth token provided or it's empty. Displaying login form.");
                     }
                 }
 
@@ -392,113 +501,7 @@
                 window.updateRecipeAccess(); // Still try to update access even if auth fails
             });
         }
-
-        async function handleSignUp() {
-            if (!auth) {
-                window.showMessage("App services not available. Cannot sign up.", "error");
-                return;
-            }
-            const email = document.getElementById('emailInput').value;
-            const password = document.getElementById('passwordInput').value;
-            if (!email || !password) {
-                window.showMessage("Please enter email and password.", "error");
-                return;
-            }
-            try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
-                // Create a basic profile in Firestore for the new user
-                if (db) {
-                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${user.uid}/profile/membership`);
-                    await setDoc(userProfileRef, { status: 'free', createdAt: new Date() });
-                    window.showMessage("Signed up and logged in successfully!", "success");
-                } else {
-                    window.showMessage("Signed up, but Firestore is not available to save profile.", "info");
-                }
-            } catch (error) {
-                console.error("Error signing up:", error);
-                window.showMessage(`Sign Up Failed: ${error.message}`, "error");
-            }
-        }
-
-        async function handleLogin() {
-            if (!auth) {
-                window.showMessage("App services not available. Cannot log in.", "error");
-                return;
-            }
-            const email = document.getElementById('emailInput').value;
-            const password = document.getElementById('passwordInput').value;
-            if (!email || !password) {
-                window.showMessage("Please enter email and password.", "error");
-                return;
-            }
-            try {
-                await signInWithEmailAndPassword(auth, email, password);
-                window.showMessage("Logged in successfully!", "success");
-            } catch (error) {
-                console.error("Error logging in:", error);
-                window.showMessage(`Login Failed: ${error.message}`, "error");
-            }
-        }
-
-        async function handleSignOut() {
-            if (!auth) {
-                window.showMessage("App services not available. Cannot sign out.", "error");
-                return;
-            }
-            try {
-                await signOut(auth);
-                window.showMessage("Signed out successfully!", "info");
-                // No anonymous sign-in after sign out as requested
-            } catch (error) {
-                console.error("Error signing out:", error);
-                window.showMessage(`Sign Out Failed: ${error.message}`, "error");
-            }
-        }
-
-        async function handleActivateMembership() {
-            if (!window.currentUserId) {
-                window.showMessage("Please sign in or sign up first!", "error");
-                return;
-            }
-            if (window.isPremiumMember) {
-                window.showMessage("You are already a premium member!", "info");
-                return;
-            }
-
-            // Redirect to Stripe payment link
-            window.open(window.stripePaymentLink, '_blank');
-
-            // Show "Confirm Membership" button after redirection
-            document.getElementById('confirmMembershipBtn').style.display = 'inline-block';
-            window.showMessage("Please complete your purchase on Stripe. Then click 'Confirm Membership Activation' here.", "info");
-        }
-
-        async function handleConfirmMembership() {
-            if (!window.currentUserId) {
-                window.showMessage("You must be signed in to confirm membership.", "error");
-                return;
-            }
-            if (window.isPremiumMember) {
-                window.showMessage("You are already a premium member!", "info");
-                return;
-            }
-
-            try {
-                if (db) {
-                    const userProfileRef = doc(db, `artifacts/${window.appId}/users/${window.currentUserId}/profile/membership`);
-                    await setDoc(userProfileRef, { status: 'premium', activatedAt: new Date() }, { merge: true });
-                    window.showMessage("Membership activated! Welcome, Premium Chef!", "success");
-                    document.getElementById('confirmMembershipBtn').style.display = 'none'; // Hide button after activation
-                } else {
-                    window.showMessage("Firestore is not available to confirm membership.", "error");
-                }
-            } catch (error) {
-                console.error("Error confirming membership:", error);
-                window.showMessage(`Failed to activate membership: ${error.message}`, "error");
-            }
-        }
-
+        
     </script>
     <!-- Chosen Palette: Warm & Cozy Neutrals with Playful Accents -->
     <!-- Application Structure Plan: The SPA is designed as a social media profile, serving as the central hub for Pip's cooking adventures. It features a prominent profile header (picture, name, bio, stats), a "Highlights" section for quick access to recipes, and a grid of "Posts" (thumbnails for each recipe). Clicking a highlight or post transitions the view from the profile to the selected recipe's interactive step-by-step guide. Each recipe guide maintains its internal "Next/Prev" navigation and a critical safety warning. A "Back to Profile" button allows seamless return to the homepage. This structure was chosen to provide an intuitive, engaging, and modern way to browse the content, mimicking familiar social media interfaces to enhance user experience and discoverability of each article. -->
@@ -1241,7 +1244,7 @@
                             <div id="hamburger-step-5" class="step-panel">
                                 <h3 class="font-bold text-xl text-amber-900 mb-2">Step 5: The Big Bite!</h3>
                                 <p class="text-stone-700">The moment of truth! Pip takes a triumphant bite out of his super cute "hamburger." The layers, the textures, the hamster-safe flavors – it's all a huge success! He's one satisfied little chef.</p>
-                                <div class="text-5xl text-center mt-6">🍔😋</div>
+                                <div class="text-5xl text-center mt-6">�😋</div>
                             </div>
                         </div>
                         <div class="flex justify-between items-center mt-6 border-t border-amber-300 pt-4">
@@ -1769,3 +1772,4 @@
 
 </body>
 </html>
+�
