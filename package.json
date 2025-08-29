@@ -1,0 +1,17 @@
+{
+  "name": "pip-the-chef-backend",
+  "version": "1.0.0",
+  "description": "A conceptual Node.js backend for Pip the Chef to handle Stripe webhooks and Firebase updates.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.1.0",
+    "stripe": "^14.24.0"
+  },
+  "author": "",
+  "license": "MIT"
+}
